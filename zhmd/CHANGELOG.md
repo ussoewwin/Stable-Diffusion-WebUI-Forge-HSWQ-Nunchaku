@@ -8,6 +8,17 @@
 </table>
 
 
+## Version 2.0.5
+
+- **修复：Krea2 INT8 在 16GB 显存下的 OutOfMemory (OOM) 缺陷与 Issue #3 解决**
+  - 彻底解决了在 `int8` / `int8 (fp16 LoRA)` 模式（`unet_storage_dtype: 'int8_tensorwise'`）下载入并运行 Krea2（`SingleStreamDiT`，如 `moodyKrea2Mix...covrot_int8.safetensors`）时的 CUDA OutOfMemoryError 显存溢出问题。同时对应解决 [Issue #3](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/issues/3)。
+  - **SingleStreamDiT INT8 Operations 算子分发修复**：在 `modules_forge/hswq_int8.py` 的 `load_unet_int8_branch` 中，将 `SingleStreamDiT`（以及 `CosmosTransformer3DModel`）加入量化算子调度，正确注入 `int8_ops` 与 `computation_dtype`（`torch.bfloat16`）。此前 `SingleStreamDiT` 未被纳入列表，导致其回退至未量化的 `comfy.ops.manual_cast` 且 `dtype=None`，所有 224 个 INT8 量化层被作为 Unexpected keys 丢弃并以 FP32（约 48.9 GB）展开，直接引爆显存。
+  - **ComfyUI 原生文本编码器原生 INT8 载入优化**：在 `split_state_dict` 中跳过对 ComfyUI 原生文本编码器（`Qwen3-VL-4B`、`Qwen3-4B`、`Gemma2-2B`）的过早全量反量化。`Qwen3_VL_4B` 现在通过 `MixedPrecisionOps` 直接以 INT8 `QuantizedTensor` 原生载入（显存仅需 4.24 GB，载入耗时从 8~31 秒大幅缩短至约 0.4 秒），并在 `dequantize_state_dict_inplace` 结束时自动释放 CUDA 缓存。
+  - **保证 CLIP CPU 卸载与跨引擎显存同步**：`comfy_te_model_options` 将 `offload_device` 严格锁定为 CPU。完善 `offload_comfy_clip`，可靠地从 ComfyUI 加载模型列表中卸载 `clip.patcher` 并将 `cond_stage_model` 权重转移至 CPU，提示词编码后文本编码器显存占用从约 4.24 GB 降至约 32.5 MB。Forge 的 `memory_management.free_memory` 在为 UNet/VAE 释放显存时联动触发 ComfyUI 显存清理，防止显存残留。
+  - **针对 `comfy_cast_weights` 算子的层级 CPU Swap 支持**：扩展 `build_module_profile` 与 `LoadedModel`，支持对带有 `comfy_cast_weights`（`MixedPrecisionOps` / `int8_ops`）的模块进行显存剖析与切分。在 16GB GPU 上，约 11.0 GB 核心层常驻显存，超出部分（约 1.87 GB）驻留 CPU 内存并在前向传播时流式按需加载，彻底杜绝 OOM。
+  - **权重调度中的推理模式安全防护**：对 `comfy.ops._quantized_apply` 进行封装，使其在 `torch.inference_mode(False)` 与 `torch.no_grad()` 下执行，消除了在设备间调度 `QuantizedTensor` 时 PyTorch 抛出的 `RuntimeError: Cannot set version_counter for inference tensor`。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.5.md)。
+
 ## Version 2.0.4
 
 - **修复：Anima 首个采样步骤 TypeError**

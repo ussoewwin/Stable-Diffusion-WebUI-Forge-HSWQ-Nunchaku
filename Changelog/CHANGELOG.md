@@ -8,6 +8,17 @@
 </table>
 
 
+## Version 2.0.5
+
+- **Fix: Krea2 INT8 OutOfMemory (OOM) on 16GB VRAM & Issue #3 Resolution**
+  - Resolves CUDA OutOfMemoryError when loading and running Krea2 (`SingleStreamDiT`, e.g. `moodyKrea2Mix...covrot_int8.safetensors`) under `int8` / `int8 (fp16 LoRA)` (`unet_storage_dtype: 'int8_tensorwise'`). Addresses [Issue #3](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/issues/3).
+  - **SingleStreamDiT INT8 Operations Dispatch**: `load_unet_int8_branch` in `modules_forge/hswq_int8.py` now includes `SingleStreamDiT` (and `CosmosTransformer3DModel`) in the operations dispatch list, properly injecting `int8_ops` and `computation_dtype` (`torch.bfloat16`). Previously, `SingleStreamDiT` fell back to unquantized `comfy.ops.manual_cast` with `dtype=None`, causing all 224 quantized weights to be rejected as unexpected keys and expanded to FP32 parameters (~48.9 GB), immediately exhausting VRAM.
+  - **Native INT8 Text Encoder Loading**: Skipped premature full-state-dict dequantization in `split_state_dict` for ComfyUI native text encoders (`Qwen3-VL-4B`, `Qwen3-4B`, `Gemma2-2B`). `Qwen3_VL_4B` now loads natively via `MixedPrecisionOps` as INT8 `QuantizedTensor` (4.24 GB in ~0.4s instead of 8.1 GB FP16 taking 8–31s), with automatic CUDA cache cleanup in `dequantize_state_dict_inplace`.
+  - **Guaranteed CLIP CPU Offloading & Inter-Engine Memory Sync**: `comfy_te_model_options` enforces `offload_device = cpu`. `offload_comfy_clip` properly unloads `clip.patcher` from ComfyUI loaded models and moves `cond_stage_model` buffers to CPU, reducing text encoder VRAM footprint from ~4.24 GB to ~32.5 MB after prompt conditioning. Forge's `memory_management.free_memory` now also cascades to ComfyUI's memory manager to evict any cached text encoder before UNet or VAE loading.
+  - **Module-Level CPU Swap for `comfy_cast_weights`**: `build_module_profile` and `LoadedModel` now profile and split modules with `comfy_cast_weights` (`MixedPrecisionOps` / `int8_ops`) when model weights plus inference reservations exceed free VRAM. On 16GB GPUs, ~11.0 GB of layers reside in VRAM while remaining layers stream seamlessly from CPU RAM without OOM.
+  - **Inference Mode Safety in Parameter Management**: Wrapped `comfy.ops._quantized_apply` to run under `torch.inference_mode(False)` and `torch.no_grad()`, eliminating PyTorch's `RuntimeError: Cannot set version_counter for inference tensor` during offload/unload device transfers.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.5) for details.
+
 ## Version 2.0.4
 
 - **Fix: Anima TypeError on first sampling step**
