@@ -10,24 +10,13 @@
 
 ## Version 2.0.4
 
-- **Fix: Anima (Cosmos Predict2) TypeError on First Sampling Step**
-  - Resolved `TypeError: _patched_compute_qkv() got an unexpected keyword argument 'transformer_options'` when generating with Anima checkpoints (e.g. `waiANIMA`) after the upstream `comfy/ldm/cosmos/predict2.py` `Attention.forward` started always passing `transformer_options` into `compute_qkv`.
-  - **Root Cause**: The Forge-side Anima Q/K RMSNorm + split-half RoPE fuse patch (`backend/nn/comfy_anima.py`) still used the old 3-argument signature (`x, context, rope_emb`), so the very first denoise step of every Anima generation crashed inside `predict2` SelfAttn.
-  - **Resolution in `backend/nn/comfy_anima.py`**: `_patched_compute_qkv` now accepts `transformer_options: Optional[dict] = None` (ignored by the fuse; SelfAttn+rope fuse behavior unchanged, CrossAttn stays stock).
-- **Fix: ControlNet ConvRot INT8 Dequantization & bfloat16 Synchronization** (be17ea8)
-  - `dequantize_state_dict_inplace` now auto-detects `compute_dtype` from the state dict (bf16/fp16) and supports the native bf16 dequantization code path (`comfy_kitchen.dequantize_int8_convrot_weight_dtype` code=2), with device-keyed Hadamard cache (`(groupsize, device)`) and CUDA-side rotation before a single `.cpu()` transfer.
-  - Standard **ControlNet** and **Qwen Image Fun ControlNet** loaders now dequantize ConvRot INT8 state dicts before instantiation; Qwen Fun models are cast to the diffusion model's device *and* floating-point dtype to avoid dtype-mismatch failures.
-- **Fix: Inference-Mode-Safe Model Moves & Quantized Loads**
-  - `ModelPatcher.forge_patch_model` / `forge_unpatch_model` and the INT8 branch `model_loader`/`load_state_dict` calls now run under `torch.inference_mode(False), torch.no_grad()` to avoid "Inference tensors cannot be saved for backward"-style crashes when mutating quantized weights outside inference mode.
-  - `comfy.ops._quantized_apply` is wrapped to disable inference mode during quantized module re-apply (protects mixed-precision parameter rewriting).
-- **Improvement: Comfy-native TE handling & memory management for Anima/Krea2**
-  - `split_state_dict` skips pre-dequantization for Comfy-native Anima/Krea2 text encoders (Qwen3/Qwen3-VL/Gemma2) so their `comfy_quant` layouts load natively instead of via fallback dequant.
-  - TE offload glue pins Comfy CLIP entirely to CPU after conditioning (with a `LoadedModel.model_unload` fallback when `unload_model_and_clones` is unavailable) and `free_memory` also frees Comfy-managed models on the same device.
-  - `build_module_profile`/LoadedModel now profile and offload `comfy_cast_weights` modules correctly (GPU-resident when they fit, proper cast-restore on unload).
-- **Improvement: Lumina2 / ZImage / SingleStreamDiT / Cosmos dtype propagation**
-  - `unet_config.setdefault("dtype", computation_dtype)` applied across standard, INT8, and Krea2 mixed-precision load branches, plus `torch.inference_mode(False)` around model construction, so transformer constructors needing an explicit `dtype` key no longer crash or silently build in fp32.
+- **Fix: Anima TypeError on first sampling step**
+  - Upstream `comfy/ldm/cosmos/predict2.py` now passes `transformer_options` to `Attention.compute_qkv`; the Forge-side Anima RoPE fuse patch (`backend/nn/comfy_anima.py`) still used the old signature, so Anima checkpoints crashed with `TypeError: _patched_compute_qkv() got an unexpected keyword argument 'transformer_options'`. `_patched_compute_qkv` now accepts and ignores the extra kwarg.
+- **Fix: ControlNet ConvRot INT8 dequantization and bfloat16 sync**
+  - `dequantize_state_dict_inplace` auto-detects bf16/fp16 compute dtype, uses the native bf16 dequant path when available, and caches Hadamard matrices per device. Standard and Qwen Image Fun ControlNet loaders dequantize INT8 state dicts before construction; Qwen Fun models sync to the diffusion model's device and dtype.
+- **Fix: inference-mode-safe quantized loads and model moves**
+  - Quantized model construction, `load_state_dict`, and `ModelPatcher` patch/unpatch moves now run with inference mode disabled so quantized weight rewrites do not hit autograd bookkeeping errors.
 - See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) for details.
-
 ## Version 2.0.3
 
 - **Fix: SDXL ConvRot INT8 CLIP-G Dequantization & Black Image Resolution**

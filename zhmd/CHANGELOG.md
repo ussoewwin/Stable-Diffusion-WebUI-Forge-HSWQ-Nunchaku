@@ -10,24 +10,13 @@
 
 ## Version 2.0.4
 
-- **修复：Anima (Cosmos Predict2) 首个采样步骤 TypeError**
-  - 解决上游 `comfy/ldm/cosmos/predict2.py` 的 `Attention.forward` 始终向 `compute_qkv` 传入 `transformer_options` 后，使用 Anima 检查点（如 `waiANIMA`）生成时出现的 `TypeError: _patched_compute_qkv() got an unexpected keyword argument 'transformer_options'`。
-  - **根本原因**：Forge 侧的 Anima Q/K RMSNorm + 半分 RoPE 融合补丁（`backend/nn/comfy_anima.py`）仍使用旧的 3 参数签名（`x, context, rope_emb`），导致每次 Anima 生成的第一个去噪步骤在 `predict2` SelfAttn 内崩溃。
-  - **`backend/nn/comfy_anima.py` 修复**：`_patched_compute_qkv` 现在接受 `transformer_options: Optional[dict] = None`（融合逻辑忽略该参数；SelfAttn+rope 融合行为不变，CrossAttn 保持原样）。
-- **修复：ControlNet ConvRot INT8 去量化与 bfloat16 同步**（be17ea8）
-  - `dequantize_state_dict_inplace` 现在从 state dict 自动检测 `compute_dtype`（bf16/fp16），支持原生 bf16 去量化路径（`comfy_kitchen.dequantize_int8_convrot_weight_dtype` code=2），Hadamard 缓存按（groupsize, device）缓存，CUDA 侧旋转后仅一次 `.cpu()` 传输。
-  - 标准 **ControlNet** 与 **Qwen Image Fun ControlNet** 加载器在实例化前对 ConvRot INT8 state dict 进行去量化；Qwen Fun 模型同步到扩散模型的设备*与*浮点 dtype，避免 dtype 不匹配失败。
-- **修复：推理模式下安全的模型移动与量化加载**
-  - `ModelPatcher.forge_patch_model` / `forge_unpatch_model` 以及 INT8 分支的 `model_loader`/`load_state_dict` 调用现在在 `torch.inference_mode(False), torch.no_grad()` 下运行，避免在推理模式外修改量化权重时出现"Inference tensors cannot be saved for backward"类崩溃。
-  - 包装 `comfy.ops._quantized_apply`，在量化模块重新应用期间禁用推理模式（保护混合精度参数重写）。
-- **改进：Comfy 原生 TE 处理与 Anima/Krea2 内存管理**
-  - `split_state_dict` 对 Comfy 原生 Anima/Krea2 文本编码器（Qwen3/Qwen3-VL/Gemma2）跳过预去量化，使其 `comfy_quant` 布局原生加载而非经由回退去量化。
-  - TE offload glue 在 conditioning 后将 Comfy CLIP 完全固定到 CPU（当 `unload_model_and_clones` 不可用时回退到 `LoadedModel.model_unload`），且 `free_memory` 也会释放同一设备上 Comfy 管理的模型。
-  - `build_module_profile`/LoadedModel 现在正确分析并 offload `comfy_cast_weights` 模块（放得下时驻留 GPU，卸载时正确恢复 cast 状态）。
-- **改进：Lumina2 / ZImage / SingleStreamDiT / Cosmos dtype 传播**
-  - 在标准、INT8 与 Krea2 混合精度加载分支中统一应用 `unet_config.setdefault("dtype", computation_dtype)`，并在模型构造外层加 `torch.inference_mode(False)`，需要显式 `dtype` 键的 transformer 构造函数不再崩溃或静默以 fp32 构建。
+- **修复：Anima 首个采样步骤 TypeError**
+  - 上游 `comfy/ldm/cosmos/predict2.py` 现在总是向 `Attention.compute_qkv` 传入 `transformer_options`，而 Forge 侧的 Anima RoPE 融合补丁（`backend/nn/comfy_anima.py`）仍是旧签名，导致 Anima 检查点以 `TypeError: _patched_compute_qkv() got an unexpected keyword argument 'transformer_options'` 崩溃。`_patched_compute_qkv` 现在接受并忽略该额外参数。
+- **修复：ControlNet ConvRot INT8 去量化与 bfloat16 同步**
+  - `dequantize_state_dict_inplace` 自动检测 bf16/fp16 计算 dtype，可用时走原生 bf16 去量化路径，并按设备缓存 Hadamard 矩阵。标准与 Qwen Image Fun ControlNet 加载器在构建前对 INT8 state dict 去量化；Qwen Fun 模型同步到扩散模型的设备与 dtype。
+- **修复：量化加载与模型移动在推理模式下安全执行**
+  - 量化模型构建、`load_state_dict` 与 `ModelPatcher` patch/unpatch 移动现在在禁用推理模式下运行，避免量化权重改写触发 autograd 记账错误。
 - 详见 [发布说明](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) 了解详情。
-
 ## Version 2.0.3
 
 - **修复：SDXL ConvRot INT8 CLIP-G 逆量化与黑图/NaN 缺陷**
