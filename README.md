@@ -67,6 +67,19 @@
 
   *`Diffusion in Low Bits` dropdown: `int8` / `int8 (fp16 LoRA)` selection*
 
+- **ConvRot INT8 Text Encoder (CLIP) & ControlNet Support**
+  - ✅ **Full ConvRot INT8 CLIP / Text Encoder support across major architectures**
+    - **SDXL**: In-place dequantization with Hadamard unrotation for CLIP-L and CLIP-G (OpenCLIP bigG) prior to key remapping, eliminating NaN and black image artifacts
+    - **Flux1 / Nunchaku Flux1**: Native support for `clip_l_hswq_convrot_int8` and `flan_t5_xxl_hswq_convrot_int8`
+    - **Z-Image (ZIT)**: Full ConvRot INT8 text encoder loading
+    - **Qwen Image**: Seamless support for ConvRot INT8 text encoders
+    - **Krea2 & Anima**: Direct INT8 `QuantizedTensor` native loading via `comfy_quant` / `MixedPrecisionOps` for Qwen3-VL-4B, Qwen3-4B, and Gemma2-2B (loads in ~0.4s @ 4.24 GB without uncompressed FP16 memory bloat)
+  - ✅ **ConvRot INT8 ControlNet Support**
+    - In-place dequantization supporting both `bfloat16` and `float16` computation dtypes
+    - Hardware-accelerated Hadamard rotation matrix cache per `(group_size, device)` to maximize throughput
+    - Safe model construction under non-inference mode to prevent autograd version counter conflicts
+  - Zero manual conversion needed — simply place ConvRot INT8 CLIP / ControlNet weights into the corresponding model directories or select them under **Additional modules**
+
 - **Krea2 Model Support**
   - ✅ **Native Forge support for Krea2** (SingleStreamDiT; e.g. `moodyKreaMix_V33.safetensors`)
   - Dedicated **UI Preset: Krea2** in the Forge checkpoint panel

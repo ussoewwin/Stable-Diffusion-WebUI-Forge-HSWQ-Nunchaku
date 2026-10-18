@@ -67,6 +67,19 @@
 
   *`Diffusion in Low Bits` 下拉菜单：`int8` / `int8 (fp16 LoRA)` 选择*
 
+- **ConvRot INT8 文本编码器（CLIP）与 ControlNet 支持**
+  - ✅ **跨主流架构全面支持 ConvRot INT8 CLIP / 文本编码器**
+    - **SDXL**：在键名转换前就地执行 CLIP-L 与 CLIP-G（OpenCLIP bigG）的反量化与 Hadamard 逆旋转，彻底杜绝黑图与 NaN 异常
+    - **Flux1 / Nunchaku Flux1**：无缝支持 `clip_l_hswq_convrot_int8` 与 `flan_t5_xxl_hswq_convrot_int8`
+    - **Z-Image (ZIT)**：完整支持 ConvRot INT8 文本编码器载入
+    - **Qwen Image**：原生支持 ConvRot INT8 文本编码器
+    - **Krea2 与 Anima**：通过 `comfy_quant` / `MixedPrecisionOps` 直接以 INT8 `QuantizedTensor` 原生载入 Qwen3-VL-4B、Qwen3-4B 与 Gemma2-2B（约 0.4 秒直接以 4.24 GB 载入，杜绝未压缩 FP16 的显存膨胀）
+  - ✅ **ConvRot INT8 ControlNet 支持**
+    - 就地反量化原生支持 `bfloat16` 与 `float16` 计算精度
+    - 按 `(group_size, device)` 维度的 GPU 硬件加速 Hadamard 旋转矩阵常驻缓存，最大化吞吐性能
+    - 针对非推理模式加固量化模型构建，消除 autograd 版本计数器冲突
+  - 无需任何手动转换——直接将 ConvRot INT8 CLIP / ControlNet 权重放入对应模型目录，或在 **Additional modules** 中选择即可
+
 - **Krea2 模型支持**
   - ✅ **Krea2 的 Native Forge 支持**（SingleStreamDiT；例如 `moodyKreaMix_V33.safetensors`）
   - Forge checkpoint 面板中的专用 **UI Preset: Krea2**
