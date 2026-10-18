@@ -38,6 +38,7 @@ def _patched_compute_qkv(
     x,
     context: Optional[object] = None,
     rope_emb: Optional[object] = None,
+    transformer_options: Optional[dict] = None,
 ):
     """Fuse Q/K RMSNorm + split-half RoPE on SelfAttn via ``rms_rope_split_half``.
 

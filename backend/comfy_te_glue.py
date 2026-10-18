@@ -17,7 +17,7 @@ def comfy_te_model_options(state_dict=None) -> dict:
     regardless of ``--always-gpu`` / HIGH_VRAM — mirror that here.
     """
     load_device = memory_management.text_encoder_device()
-    offload_device = memory_management.text_encoder_offload_device()
+    offload_device = memory_management.cpu
     opts = {
         "load_device": load_device,
         "offload_device": offload_device,
@@ -41,17 +41,35 @@ def is_comfy_sd_clip(obj) -> bool:
 def offload_comfy_clip(clip) -> None:
     """
     Drop Comfy TE from GPU after conditioning.
-
-    Must use Comfy ``unload_model_and_clones`` (``free_memory`` path).  Never call
-    ``LoadedModel.model_unload()`` directly — that leaves ``real_model=None`` in
-    ``current_loaded_models`` and breaks the next ``encode_from_tokens``.
     """
     if clip is None or not hasattr(clip, "patcher") or clip.patcher is None:
         return
     try:
         import comfy.model_management as mm
 
-        mm.unload_model_and_clones(clip.patcher)
+        if hasattr(mm, "unload_model_and_clones"):
+            mm.unload_model_and_clones(clip.patcher)
+        else:
+            for i in range(len(mm.current_loaded_models) - 1, -1, -1):
+                lm = mm.current_loaded_models[i]
+                if lm.model is clip.patcher or clip.patcher.is_clone(lm.model):
+                    if lm.model_unload():
+                        mm.current_loaded_models.pop(i)
+            mm.free_memory(1e30, clip.patcher.load_device)
+    except Exception:
+        pass
+    try:
+        offload_dev = getattr(clip.patcher, "offload_device", None) or memory_management.cpu
+        cond_model = getattr(clip, "cond_stage_model", None) or getattr(clip.patcher, "model", None)
+        if cond_model is not None:
+            has_gpu_tensor = any(
+                p.device.type != "cpu" for p in cond_model.parameters()
+            ) or any(
+                b.device.type != "cpu" for b in cond_model.buffers()
+            )
+            if has_gpu_tensor:
+                cond_model.to(offload_dev)
+                clip.patcher.current_loaded_device = offload_dev
     except Exception:
         pass
     memory_management.soft_empty_cache()

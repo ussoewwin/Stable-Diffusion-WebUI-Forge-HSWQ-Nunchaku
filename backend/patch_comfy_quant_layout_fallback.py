@@ -440,6 +440,7 @@ def dequantize_state_dict_inplace(state_dict: dict, compute_dtype=None) -> dict:
     if count > 0:
         if use_cuda:
             torch.cuda.synchronize()
+            torch.cuda.empty_cache()
         print(f"[Forge] Dequantized {count} ConvRot/INT8 weights to {target_dtype} in {time.time() - t0:.2f}s")
 
     return state_dict

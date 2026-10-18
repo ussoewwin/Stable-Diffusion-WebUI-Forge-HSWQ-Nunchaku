@@ -420,6 +420,7 @@ def module_move(module, device, recursive=True, excluded_patterns=[]):
 
 def build_module_profile(model: ModelPatcher, swap_memory):
     all_modules = []
+    comfy_modules = []
     gpu_modules = []
     extras_modules = []
     mem_counter = 0
@@ -428,13 +429,23 @@ def build_module_profile(model: ModelPatcher, swap_memory):
         if hasattr(m, "parameters_manual_cast"):
             m.total_mem, m.weight_mem, m.extra_mem = module_size(m, return_split=True)
             all_modules.append(m)
+        elif hasattr(m, "comfy_cast_weights"):
+            m.total_mem, m.weight_mem, m.extra_mem = module_size(m, return_split=True)
+            comfy_modules.append(m)
         else:
             m.total_mem, m.weight_mem, m.extra_mem = module_size(m, return_split=True)
             gpu_modules.append(m)
             mem_counter += m.total_mem
 
+    for m in comfy_modules:
+        if mem_counter + m.total_mem < swap_memory:
+            gpu_modules.append(m)
+            mem_counter += m.total_mem
+        else:
+            all_modules.append(m)
+
     for m in sorted(all_modules.copy(), key=lambda x: x.extra_mem):
-        if mem_counter + m.extra_mem < swap_memory:
+        if hasattr(m, "parameters_manual_cast") and mem_counter + m.extra_mem < swap_memory:
             all_modules.remove(m)
             extras_modules.append(m)
             mem_counter += m.extra_mem
@@ -490,11 +501,18 @@ class LoadedModel:
                 mem_counter += m.total_mem
 
             for m in cpu_modules:
-                m.prev_parameters_manual_cast = m.parameters_manual_cast
-                m.parameters_manual_cast = True
-                m.to(self.model.offload_device)
-                if pin_memory:
-                    m._apply(lambda x: x.pin_memory())
+                if hasattr(m, "parameters_manual_cast"):
+                    m.prev_parameters_manual_cast = m.parameters_manual_cast
+                    m.parameters_manual_cast = True
+                    m.to(self.model.offload_device)
+                    if pin_memory:
+                        m._apply(lambda x: x.pin_memory())
+                elif hasattr(m, "comfy_cast_weights"):
+                    m.prev_comfy_cast_weights = m.comfy_cast_weights
+                    m.comfy_cast_weights = True
+                    m.to(self.model.offload_device)
+                else:
+                    m.to(self.model.offload_device)
                 swap_counter += m.total_mem
 
             for m in gpu_modules_only_extras:
@@ -533,6 +551,9 @@ class LoadedModel:
                 if hasattr(m, "prev_parameters_manual_cast"):
                     m.parameters_manual_cast = m.prev_parameters_manual_cast
                     del m.prev_parameters_manual_cast
+                if hasattr(m, "prev_comfy_cast_weights"):
+                    m.comfy_cast_weights = m.prev_comfy_cast_weights
+                    del m.prev_comfy_cast_weights
 
             self.model_accelerated = False
 
@@ -585,6 +606,15 @@ def free_memory(memory_required, device, keep_loaded=[], free_all=False):
         offload_everything = ALWAYS_VRAM_OFFLOAD or vram_state is VRAMState.NO_VRAM
 
     unloaded_model = False
+    try:
+        import comfy.model_management as cmm
+        if len(cmm.current_loaded_models) > 0 and (offload_everything or get_free_memory(device) <= memory_required):
+            unloaded_comfy = cmm.free_memory(1e30, device)
+            if unloaded_comfy:
+                unloaded_model = True
+    except Exception:
+        pass
+
     for i in range(len(current_loaded_models) - 1, -1, -1):
         if not offload_everything:
             if get_free_memory(device) > memory_required:

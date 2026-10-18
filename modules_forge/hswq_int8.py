@@ -346,10 +346,11 @@ def load_unet_int8_branch(
 
     # MUST build ops inside Conv-inject scope (see build_int8_operations docstring).
     int8_ops = build_int8_operations(computation_dtype)
-    if cls_name in ("Lumina2Transformer2DModel", "ZImageTransformer2DModel") and not _nz:
+    if cls_name in ("Lumina2Transformer2DModel", "ZImageTransformer2DModel", "SingleStreamDiT", "CosmosTransformer3DModel") and not _nz:
         unet_config = dict(unet_config)
         unet_config["operations"] = int8_ops
-        _plog("ZIT/Lumina2: unet_config['operations']=int8_ops")
+        unet_config.setdefault("dtype", computation_dtype)
+        _plog(f"{cls_name}: unet_config['operations']=int8_ops, dtype={unet_config.get('dtype')}")
 
     _plog("construct UNet under using_forge_operations(operations=int8_ops)")
     with using_forge_operations(
@@ -365,7 +366,8 @@ def load_unet_int8_branch(
             f"during construct: torch.nn.Conv2d={torch.nn.Conv2d!r} "
             f"_hswq={getattr(torch.nn.Conv2d, '_hswq_quant_conv2d', None)}"
         )
-        model = model_loader(unet_config)
+        with torch.inference_mode(False), torch.no_grad():
+            model = model_loader(unet_config)
 
     probe_before = _probe_model_quant(model)
     _plog(f"after construct (before load_state_dict): {probe_before}")

@@ -106,6 +106,7 @@ def _load_krea2_mixed_precision_unet(
     )
     unet_config = dict(unet_config)
     unet_config["operations"] = mixed_ops
+    unet_config.setdefault("dtype", computation_dtype)
 
     print(
         f"[Krea2 MixedPrecision] comfy_quant detected — "
@@ -127,7 +128,8 @@ def _load_krea2_mixed_precision_unet(
         dtype=computation_dtype,
         manual_cast_enabled=False,
     ):
-        model = model_loader(unet_config)
+        with torch.inference_mode(False), torch.no_grad():
+            model = model_loader(unet_config)
 
     model = model.to(device=initial_device)
     load_state_dict(model, state_dict)
@@ -300,6 +302,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                         beautiful_print_gguf_state_dict_statics(state_dict)
             else:
                 print(f"Using Default Qwen2.5 Data Type: {storage_dtype}")
+
+            from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+            state_dict = dequantize_state_dict_inplace(state_dict, compute_dtype=storage_dtype)
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -578,6 +583,8 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 import comfy.ops
                 # Ensure operations is set in unet_config for standard ZIT (same as ComfyUI Lumina2)
                 unet_config["operations"] = comfy.ops.manual_cast
+            if cls_name in ("Lumina2Transformer2DModel", "ZImageTransformer2DModel", "SingleStreamDiT", "CosmosTransformer3DModel") and not _nz:
+                unet_config.setdefault("dtype", computation_dtype)
             
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 initial_device = memory_management.unet_initial_load_device(parameters=state_dict_parameters, dtype=computation_dtype)
@@ -982,8 +989,17 @@ def split_state_dict(sd, additional_state_dicts: list = None):
 
     state_dict = {guess.unet_target: try_filter_state_dict(sd, guess.unet_key_prefix), guess.vae_target: try_filter_state_dict(sd, guess.vae_key_prefix)}
 
-    from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
-    sd = dequantize_state_dict_inplace(sd, compute_dtype=memory_management.text_encoder_dtype())
+    _comfy_native_te = (
+        _is_krea2_guess(guess)
+        or _is_anima_guess(guess)
+        or any(
+            k in getattr(guess, "clip_target", {})
+            for k in ("qwen3vl_4b", "qwen3_4b", "qwen3_06b", "gemma2_2b")
+        )
+    )
+    if not _comfy_native_te:
+        from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+        sd = dequantize_state_dict_inplace(sd, compute_dtype=memory_management.text_encoder_dtype())
 
     sd = guess.process_clip_state_dict(sd)
 
