@@ -17,6 +17,7 @@
 - **修复：量化加载与模型移动在推理模式下安全执行**
   - 量化模型构建、`load_state_dict` 与 `ModelPatcher` patch/unpatch 移动现在在禁用推理模式下运行，避免量化权重改写触发 autograd 记账错误。
 - 详见 [发布说明](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) 了解详情。
+
 ## Version 2.0.3
 
 - **修复：SDXL ConvRot INT8 CLIP-G 逆量化与黑图/NaN 缺陷**
