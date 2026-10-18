@@ -26,7 +26,9 @@
   - `build_module_profile`/LoadedModel now profile and offload `comfy_cast_weights` modules correctly (GPU-resident when they fit, proper cast-restore on unload).
 - **Improvement: Lumina2 / ZImage / SingleStreamDiT / Cosmos dtype propagation**
   - `unet_config.setdefault("dtype", computation_dtype)` applied across standard, INT8, and Krea2 mixed-precision load branches, plus `torch.inference_mode(False)` around model construction, so transformer constructors needing an explicit `dtype` key no longer crash or silently build in fp32.
-- Release notes: pending (v2.0.4)## Version 2.0.3
+- Release notes: pending (v2.0.4)
+
+## Version 2.0.3
 
 - **Fix: SDXL ConvRot INT8 CLIP-G Dequantization & Black Image Resolution**
   - Resolved generation outputting solid black images (or NaN latent collapse) when loading SDXL checkpoints with ConvRot INT8 text encoders under `int8` / `int8 (fp16 LoRA)`.
