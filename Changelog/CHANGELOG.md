@@ -16,8 +16,7 @@
   - `dequantize_state_dict_inplace` auto-detects bf16/fp16 compute dtype, uses the native bf16 dequant path when available, and caches Hadamard matrices per device. Standard and Qwen Image Fun ControlNet loaders dequantize INT8 state dicts before construction; Qwen Fun models sync to the diffusion model's device and dtype.
 - **Fix: inference-mode-safe quantized loads and model moves**
   - Quantized model construction, `load_state_dict`, and `ModelPatcher` patch/unpatch moves now run with inference mode disabled so quantized weight rewrites do not hit autograd bookkeeping errors.
-- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) for details.
-## Version 2.0.3
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) for details.`r`n`r`n## Version 2.0.3
 
 - **Fix: SDXL ConvRot INT8 CLIP-G Dequantization & Black Image Resolution**
   - Resolved generation outputting solid black images (or NaN latent collapse) when loading SDXL checkpoints with ConvRot INT8 text encoders under `int8` / `int8 (fp16 LoRA)`.
