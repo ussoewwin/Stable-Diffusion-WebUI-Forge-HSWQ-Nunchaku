@@ -975,6 +975,16 @@ class NunchakuZImageAttention(JointAttention):
 
     def __init__(self, orig_attn: JointAttention, **kwargs):
         nn.Module.__init__(self)
+        self._orig_attn = orig_attn
+        for k, v in orig_attn.__dict__.items():
+            if not k.startswith("_"):
+                setattr(self, k, v)
+        comfy_attn = getattr(orig_attn, "comfy_attention", None)
+        if comfy_attn is None:
+            from comfy.ldm.modules.attention import ComfyAttention
+            comfy_attn = ComfyAttention()
+        object.__setattr__(self, "comfy_attention", comfy_attn)
+        self.qk_norm = getattr(orig_attn, "qk_norm", True)
         self.n_kv_heads = orig_attn.n_kv_heads
         self.n_local_heads = orig_attn.n_local_heads
         self.n_local_kv_heads = orig_attn.n_local_kv_heads
@@ -986,6 +996,14 @@ class NunchakuZImageAttention(JointAttention):
 
         self.q_norm = orig_attn.q_norm
         self.k_norm = orig_attn.k_norm
+
+    def __getattr__(self, name: str):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            if name != "_orig_attn" and hasattr(self, "_orig_attn"):
+                return getattr(self._orig_attn, name)
+            raise
 
     def forward(
         self,
@@ -1120,7 +1138,18 @@ def patch_nunchaku_zimage(model: NextDiT, precision: str, rank: int):
     @wraps(_load_state_dict)
     def load_state_dict(sd, *args, **kwargs):
         sd = patch_z_image_state_dict(sd)
-        patch_scale_key(model, sd)
+        # Safely supplement missing .wcscales without crashing on non-scale keys
+        state_dict = model.state_dict()
+        for k in state_dict.keys():
+            if k not in sd:
+                if ".wcscales" in k or "wcscales" in k:
+                    sd[k] = torch.ones_like(state_dict[k])
+
+        for n, m in model.named_modules():
+            if isinstance(m, SVDQW4A4Linear):
+                if getattr(m, "wtscale", None) is not None:
+                    m.wtscale = sd.pop(f"{n}.wtscale", 1.0)
+
         result = _load_state_dict(sd, *args, **kwargs)
         # Apply Z-Image specific LoRAs after state dict is loaded
         if model.loras != model._applied_loras:

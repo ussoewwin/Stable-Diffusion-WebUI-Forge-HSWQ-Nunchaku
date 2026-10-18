@@ -7,6 +7,15 @@
   </tr>
 </table>
 
+## Version 2.0.1
+
+- **Deprecation & Removal: SDXL ConvRot NVFP4 Support**
+  - Officially removed all references and support for **SDXL ConvRot NVFP4** in accordance with upstream [Hybrid-Sensitivity-Weighted-Quantization (HSWQ)](https://github.com/ussoewwin/Hybrid-Sensitivity-Weighted-Quantization) updates.
+  - **Technical Rationale**: Deterministic latent-trajectory divergence measurements revealed that 4-bit precision (NVFP4) fundamentally fails to preserve latent trajectory fidelity on SDXL (final latent trajectory cosine fails to reach 0.90, suffering severe trajectory drift and collapse). Legacy decoded SSIM (~0.95) scores were masked by the VAE decoder rather than true latent-space preservation.
+  - **SDXL Precision Policy**: SDXL is supported strictly in **ConvRot INT8 (reverse hybrid)** only (`int8` / `int8 (fp16 LoRA)`).
+  - Cleaned up documentation, READMEs, and loader specifications across the repository.
+  - See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.1) for details.
+
 ## Version 2.0.0
 
 - **Python 3.14 Exclusive Support & Platform Compatibility Update**

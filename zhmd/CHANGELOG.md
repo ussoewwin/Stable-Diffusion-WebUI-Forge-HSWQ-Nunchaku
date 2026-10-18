@@ -7,6 +7,15 @@
   </tr>
 </table>
 
+## Version 2.0.1
+
+- **废除并完全移除：SDXL ConvRot NVFP4 支持**
+  - 同步上游 [Hybrid-Sensitivity-Weighted-Quantization (HSWQ)](https://github.com/ussoewwin/Hybrid-Sensitivity-Weighted-Quantization) 的最新调整，全面移除 **SDXL ConvRot NVFP4** 的所有支持与相关文档说明。
+  - **技术原因**：确定性潜在空间轨迹发散测量（deterministic latent-trajectory divergence measurements）表明，4-bit 精度（NVFP4）从根本上无法在 SDXL 上维持潜在轨迹保真度（最终潜在轨迹 cosine 无法达到 0.90，出现严重的轨迹漂移与发散崩溃）。早期的解码后 SSIM（~0.95）是因 VAE 解码器的平滑滤波效应掩盖了误差假象，并非真正的潜在空间高保真保留。
+  - **SDXL 精度支持规范**：SDXL 的量化支持严格收敛并专注于 **ConvRot INT8（reverse hybrid）**（`int8` / `int8 (fp16 LoRA)`）。
+  - 同步清理了仓库内的相关文档、README 及加载器规范。
+  - 详情请参阅 [Release Notes（中文）](v2.0.1.md)。
+
 ## Version 2.0.0
 
 - **全面升级为仅支持 Python 3.14 与多平台兼容性支持**

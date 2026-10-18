@@ -204,9 +204,10 @@ def _comfy_load_te(guess, state_dict, clip_key: str, layer_probe: str, spiece_fr
         if spiece is not None:
             te_sd["spiece_model"] = spiece
 
+    te_opts = comfy_te_model_options(te_sd)
     if clip_type is not None:
-        return load_text_encoder_state_dicts([te_sd], clip_type=clip_type, model_options=comfy_te_model_options())
-    return load_text_encoder_state_dicts([te_sd], model_options=comfy_te_model_options())
+        return load_text_encoder_state_dicts([te_sd], clip_type=clip_type, model_options=te_opts)
+    return load_text_encoder_state_dicts([te_sd], model_options=te_opts)
 
 
 def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_path, state_dict):
