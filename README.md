@@ -48,7 +48,7 @@
   - AWQ quantization layer handling with safety switch
 
 - **INT8 (Low Bits) UNet Quantization**
-  - ✅ **INT8 UNet support for SDXL and Z-Image**
+  - ✅ **INT8 UNet / DiT support for SDXL, Z-Image, and Krea2**
   - Selected explicitly from the **`Diffusion in Low Bits` dropdown** in the Forge settings panel, never auto-detected. The full menu is:
     - `Automatic` — no forced storage dtype (default; **not** INT8)
     - `Automatic (fp16 LoRA)` — same as `Automatic`, LoRA kept in FP16
@@ -83,6 +83,7 @@
 - **Krea2 Model Support**
   - ✅ **Native Forge support for Krea2** (SingleStreamDiT; e.g. `moodyKreaMix_V33.safetensors`)
   - Dedicated **UI Preset: Krea2** in the Forge checkpoint panel
+  - ✅ **Full INT8 DiT (`int8` / `int8 (fp16 LoRA)`) support with dynamic layer swapping** for smooth generation on 16GB GPUs
   - Load **Additional modules**: `qwen_image_vae.safetensors` (Qwen-Image VAE), Qwen3-VL-4B text encoder (e.g. `qwen3vl_4b_bf16.safetensors`)
   - LoRA key mapping via `krea2_to_diffusers`
 

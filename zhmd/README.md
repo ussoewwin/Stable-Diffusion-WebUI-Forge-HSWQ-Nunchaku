@@ -48,7 +48,7 @@
   - AWQ 量化层处理及安全开关
 
 - **INT8（Low Bits）UNet 量化**
-  - ✅ **对 SDXL 和 Z-Image 的 INT8 UNet 支持**
+  - ✅ **对 SDXL、Z-Image 与 Krea2 的 INT8 UNet / DiT 支持**
   - 在 Forge 设置面板的 **`Diffusion in Low Bits` 下拉菜单** 中显式选择，绝不自动检测。完整菜单如下：
     - `Automatic` — 不强制存储 dtype（默认；**非** INT8）
     - `Automatic (fp16 LoRA)` — 与 `Automatic` 相同，LoRA 保留为 FP16
@@ -83,6 +83,7 @@
 - **Krea2 模型支持**
   - ✅ **Krea2 的 Native Forge 支持**（SingleStreamDiT；例如 `moodyKreaMix_V33.safetensors`）
   - Forge checkpoint 面板中的专用 **UI Preset: Krea2**
+  - ✅ **完整支持 INT8 DiT（`int8` / `int8 (fp16 LoRA)`）与动态层级交换**，实现在 16GB 显存设备上的流畅生成
   - 加载 **Additional modules**：`qwen_image_vae.safetensors`（Qwen-Image VAE）、Qwen3-VL-4B 文本编码器（例如 `qwen3vl_4b_bf16.safetensors`）
   - 通过 `krea2_to_diffusers` 进行 LoRA 键映射
 
