@@ -7,7 +7,26 @@
   </tr>
 </table>
 
-## Version 2.0.3
+
+## Version 2.0.4
+
+- **Fix: Anima (Cosmos Predict2) TypeError on First Sampling Step**
+  - Resolved `TypeError: _patched_compute_qkv() got an unexpected keyword argument 'transformer_options'` when generating with Anima checkpoints (e.g. `waiANIMA`) after the upstream `comfy/ldm/cosmos/predict2.py` `Attention.forward` started always passing `transformer_options` into `compute_qkv`.
+  - **Root Cause**: The Forge-side Anima Q/K RMSNorm + split-half RoPE fuse patch (`backend/nn/comfy_anima.py`) still used the old 3-argument signature (`x, context, rope_emb`), so the very first denoise step of every Anima generation crashed inside `predict2` SelfAttn.
+  - **Resolution in `backend/nn/comfy_anima.py`**: `_patched_compute_qkv` now accepts `transformer_options: Optional[dict] = None` (ignored by the fuse; SelfAttn+rope fuse behavior unchanged, CrossAttn stays stock).
+- **Fix: ControlNet ConvRot INT8 Dequantization & bfloat16 Synchronization** (be17ea8)
+  - `dequantize_state_dict_inplace` now auto-detects `compute_dtype` from the state dict (bf16/fp16) and supports the native bf16 dequantization code path (`comfy_kitchen.dequantize_int8_convrot_weight_dtype` code=2), with device-keyed Hadamard cache (`(groupsize, device)`) and CUDA-side rotation before a single `.cpu()` transfer.
+  - Standard **ControlNet** and **Qwen Image Fun ControlNet** loaders now dequantize ConvRot INT8 state dicts before instantiation; Qwen Fun models are cast to the diffusion model's device *and* floating-point dtype to avoid dtype-mismatch failures.
+- **Fix: Inference-Mode-Safe Model Moves & Quantized Loads**
+  - `ModelPatcher.forge_patch_model` / `forge_unpatch_model` and the INT8 branch `model_loader`/`load_state_dict` calls now run under `torch.inference_mode(False), torch.no_grad()` to avoid "Inference tensors cannot be saved for backward"-style crashes when mutating quantized weights outside inference mode.
+  - `comfy.ops._quantized_apply` is wrapped to disable inference mode during quantized module re-apply (protects mixed-precision parameter rewriting).
+- **Improvement: Comfy-native TE handling & memory management for Anima/Krea2**
+  - `split_state_dict` skips pre-dequantization for Comfy-native Anima/Krea2 text encoders (Qwen3/Qwen3-VL/Gemma2) so their `comfy_quant` layouts load natively instead of via fallback dequant.
+  - TE offload glue pins Comfy CLIP entirely to CPU after conditioning (with a `LoadedModel.model_unload` fallback when `unload_model_and_clones` is unavailable) and `free_memory` also frees Comfy-managed models on the same device.
+  - `build_module_profile`/LoadedModel now profile and offload `comfy_cast_weights` modules correctly (GPU-resident when they fit, proper cast-restore on unload).
+- **Improvement: Lumina2 / ZImage / SingleStreamDiT / Cosmos dtype propagation**
+  - `unet_config.setdefault("dtype", computation_dtype)` applied across standard, INT8, and Krea2 mixed-precision load branches, plus `torch.inference_mode(False)` around model construction, so transformer constructors needing an explicit `dtype` key no longer crash or silently build in fp32.
+- Release notes: pending (v2.0.4)## Version 2.0.3
 
 - **Fix: SDXL ConvRot INT8 CLIP-G Dequantization & Black Image Resolution**
   - Resolved generation outputting solid black images (or NaN latent collapse) when loading SDXL checkpoints with ConvRot INT8 text encoders under `int8` / `int8 (fp16 LoRA)`.
