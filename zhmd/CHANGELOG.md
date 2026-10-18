@@ -7,6 +7,17 @@
   </tr>
 </table>
 
+## Version 2.0.3
+
+- **修复：SDXL ConvRot INT8 CLIP-G 逆量化与黑图/NaN 缺陷**
+  - 彻底解决了在 `int8` / `int8 (fp16 LoRA)` 模式下载入带有 ConvRot INT8 文本编码器的 SDXL 模型时，生成结果输出全黑图像（黑图或 NaN 崩溃）的问题。
+  - **技术根本原因**：在 `backend/loader.py` 中，`guess.process_clip_state_dict()` 在执行 `comfy_quant` 逆量化之前就重命名了 CLIP-G（`text_encoder_2` / OpenCLIP bigG）的层键名（例如将 `resblocks.*.weight` 转换为 `text_model.encoder.layers.*.weight`）。这导致 CLIP-G 的 `.weight_scale` 与 `.comfy_quant` 键无法匹配（成为 Unexpected keys），使得 63 个经过 Hadamard 旋转的 Linear 层未经逆量化与逆旋转便以原始 INT8 权重视为浮点数送入文本编码，导致文本特征输出全为极端离群值/NaN。
+  - **`backend/loader.py` 修复方案**：在分离 `unet` 和 `vae` 的 state_dict 后、且在 `guess.process_clip_state_dict()` 重命名键名之前，立即就地执行逆量化与 Hadamard 逆旋转（`dequantize_state_dict_inplace`），确保 CLIP-L（70层）与 CLIP-G（63层）均在标准 Float16 下完成完整逆旋转后再被载入。
+- **架构优化：Hadamard 矩阵显存缓存与无侵入式运行时 Hook**
+  - 将 Hadamard 矩阵的设备缓存与 GPU 原生逆旋转优化移入 Forge 自身的 `modules_forge/hswq_int8.py`，通过运行时 Hook（`_apply_forge_hadamard_cache_patches`）动态挂载。
+  - 保持 `modules/ComfyUI-HSWQ-Loader-and-Tools` 零改动，避免后续上游更新时发生覆盖或代码冲突。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.3.md)。
+
 ## Version 2.0.2
 
 - **修复：ComfyUI v0.40.0 AIMDO 导入异常与兼容性 Stub 实现**

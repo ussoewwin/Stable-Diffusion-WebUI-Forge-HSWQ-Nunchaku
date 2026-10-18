@@ -7,6 +7,17 @@
   </tr>
 </table>
 
+## Version 2.0.3
+
+- **Fix: SDXL ConvRot INT8 CLIP-G Dequantization & Black Image Resolution**
+  - Resolved generation outputting solid black images (or NaN latent collapse) when loading SDXL checkpoints with ConvRot INT8 text encoders under `int8` / `int8 (fp16 LoRA)`.
+  - **Technical Root Cause**: In `backend/loader.py`, `guess.process_clip_state_dict()` remapped CLIP-G (`text_encoder_2` / OpenCLIP bigG) layer keys (e.g. `resblocks.*.weight` to `text_model.encoder.layers.*.weight`) *before* `comfy_quant` dequantization occurred. This left CLIP-G's `.weight_scale` and `.comfy_quant` keys unmatched ("Unexpected keys"), preventing dequantization and unrotation of the 63 rotated linear layers in OpenCLIP bigG.
+  - **Resolution in `backend/loader.py`**: Added in-place dequantization and Hadamard unrotation (`dequantize_state_dict_inplace`) directly after popping `unet` and `vae` state dicts and *before* `guess.process_clip_state_dict()` transforms the CLIP keys.
+- **Optimization & Architecture: Runtime Hadamard Device Caching**
+  - Relocated the step-by-step Hadamard cache and GPU-device unrotation optimizations to Forge's wrapper (`modules_forge/hswq_int8.py`) via runtime monkeypatching (`_apply_forge_hadamard_cache_patches`).
+  - Ensures `modules/ComfyUI-HSWQ-Loader-and-Tools` remains completely unmodified, preventing conflicts and code overwrites during periodic upstream syncs.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.3) for details.
+
 ## Version 2.0.2
 
 - **Fix: ComfyUI v0.40.0 AIMDO Import Failure & Compatibility Stubs**
