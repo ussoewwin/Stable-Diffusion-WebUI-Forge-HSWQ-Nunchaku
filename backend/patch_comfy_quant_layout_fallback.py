@@ -45,6 +45,13 @@ def _dequant_to_compute(weight: torch.Tensor, quant_format: str, scales: dict, c
             out = out * s.reshape(-1, *([1] * (out.ndim - 1)))
         else:
             out = out * s
+        if scales.get("convrot", False):
+            gs = int(scales.get("convrot_groupsize", 256) or 256)
+            if out.dim() == 2 and out.shape[1] < gs and (out.shape[1] in (16, 64, 128)):
+                gs = out.shape[1]
+            from comfy_kitchen.backends.eager.convrot_w4a4 import _build_hadamard, _rotate_weight
+            h = _build_hadamard(gs, device=out.device, dtype=torch.float32)
+            out = _rotate_weight(out, h, gs)
         return out.to(dtype=compute_dtype)
 
     raise RuntimeError(
@@ -112,7 +119,11 @@ def _forge_dequant_load_quantized_module(
         scale = pop_scale("weight_scale")
         if scale is None:
             raise ValueError(f"Missing INT8 weight scale for layer {layer_name}")
-        scales = {"scale": scale}
+        scales = {
+            "scale": scale,
+            "convrot": bool(layer_conf.get("convrot", False)),
+            "convrot_groupsize": int(layer_conf.get("convrot_groupsize", 256) or 256),
+        }
         # drop unused scale keys that may exist for other formats
         pop_scale("weight_scale_2")
         pop_scale("input_scale")
@@ -223,7 +234,7 @@ def _wrap_embedding_load(orig_load, compute_dtype: torch.dtype):
             try:
                 layer_conf = json.loads(state_dict[quant_key].numpy().tobytes())
                 quant_format = layer_conf.get("format") if layer_conf is not None else None
-                if quant_format in ("float8_e4m3fn", "float8_e5m2"):
+                if quant_format in ("float8_e4m3fn", "float8_e5m2", "int8_tensorwise"):
                     layout_name = QUANT_ALGOS[quant_format]["comfy_tensor_layout"]
                     if get_layout_class(layout_name) is None:
                         state_dict.pop(quant_key)
@@ -231,7 +242,11 @@ def _wrap_embedding_load(orig_load, compute_dtype: torch.dtype):
                         scale_key = f"{prefix}weight_scale"
                         scale = state_dict.pop(scale_key, None)
                         device = weight.device
-                        scales = {"scale": scale.to(device=device) if scale is not None else None}
+                        scales = {
+                            "scale": scale.to(device=device) if scale is not None else None,
+                            "convrot": bool(layer_conf.get("convrot", False)),
+                            "convrot_groupsize": int(layer_conf.get("convrot_groupsize", 256) or 256),
+                        }
                         dequant = _dequant_to_compute(weight, quant_format, scales, compute_dtype)
                         self.weight = torch.nn.Parameter(dequant, requires_grad=False)
                         self.layout_type = None
@@ -295,3 +310,125 @@ def ensure_comfy_quant_layout_fallback_patch() -> bool:
     _PATCHED = True
     print("[Forge] comfy_quant layout fallback patch active (dequant when kitchen layout is None)")
     return True
+
+
+def dequantize_state_dict_inplace(state_dict: dict, compute_dtype=None) -> dict:
+    """Dequantize any quantized weights (*.weight_scale, *.comfy_quant) in state_dict in-place.
+
+    Supports:
+      - int8_tensorwise (with or without ConvRot Hadamard rotation)
+      - float8_e4m3fn / float8_e5m2
+    """
+    if not isinstance(state_dict, dict) or len(state_dict) == 0:
+        return state_dict
+
+    has_quant = any(
+        isinstance(k, str) and (k.endswith(".weight_scale") or k.endswith(".comfy_quant"))
+        for k in state_dict.keys()
+    )
+    if not has_quant:
+        return state_dict
+
+    import time
+    t0 = time.time()
+    count = 0
+
+    from comfy_kitchen.backends.eager.convrot_w4a4 import _build_hadamard, _rotate_weight
+
+    h_cache = {}
+
+    use_cuda = torch.cuda.is_available()
+    has_ck_cuda = False
+    if use_cuda:
+        try:
+            import comfy_kitchen
+            if hasattr(torch.ops.comfy_kitchen, "dequantize_int8_convrot_weight_dtype"):
+                has_ck_cuda = True
+        except Exception:
+            pass
+
+    scale_keys = [k for k in list(state_dict.keys()) if isinstance(k, str) and k.endswith(".weight_scale")]
+
+    for scale_key in scale_keys:
+        base = scale_key[: -len(".weight_scale")]
+        w_key = base + ".weight"
+        q_key = base + ".comfy_quant"
+
+        if w_key not in state_dict:
+            continue
+
+        weight = state_dict[w_key]
+        scale = state_dict.pop(scale_key)
+        q_tensor = state_dict.pop(q_key, None)
+
+        target_dtype = compute_dtype if compute_dtype is not None else torch.float16
+
+        layer_conf = {}
+        if q_tensor is not None:
+            try:
+                if hasattr(q_tensor, "numpy"):
+                    layer_conf = json.loads(q_tensor.numpy().tobytes())
+                elif isinstance(q_tensor, (bytes, bytearray)):
+                    layer_conf = json.loads(bytes(q_tensor))
+                elif isinstance(q_tensor, str):
+                    layer_conf = json.loads(q_tensor)
+            except Exception:
+                layer_conf = {}
+
+        quant_format = layer_conf.get("format", "int8_tensorwise")
+        has_convrot = bool(layer_conf.get("convrot", False))
+        gs = int(layer_conf.get("convrot_groupsize", 256) or 256)
+        if weight.dim() == 2 and weight.shape[1] < gs and (weight.shape[1] in (16, 64, 128)):
+            gs = weight.shape[1]
+
+        if quant_format in ("float8_e4m3fn", "float8_e5m2"):
+            out = weight.to(dtype=torch.float32)
+            if scale is not None:
+                out = out * scale.to(device=out.device, dtype=torch.float32)
+            state_dict[w_key] = out.to(dtype=target_dtype)
+            count += 1
+        elif quant_format == "int8_tensorwise" or weight.dtype == torch.int8:
+            if has_convrot and weight.dim() == 2:
+                dequantized = False
+                if has_ck_cuda:
+                    try:
+                        w_cu = weight.cuda()
+                        s_cu = scale.to(device=w_cu.device, dtype=torch.float32).reshape(-1).contiguous()
+                        code = 1 if target_dtype == torch.float16 else 0
+                        out_cu = torch.ops.comfy_kitchen.dequantize_int8_convrot_weight_dtype(w_cu, s_cu, gs, code)
+                        state_dict[w_key] = out_cu.cpu().to(dtype=target_dtype)
+                        del w_cu, s_cu, out_cu
+                        dequantized = True
+                    except Exception:
+                        dequantized = False
+
+                if not dequantized:
+                    if gs not in h_cache:
+                        h_cache[gs] = _build_hadamard(gs, device="cpu", dtype=torch.float32)
+                    s = scale.to(device=weight.device, dtype=torch.float32)
+                    if s.ndim == 1:
+                        s = s.reshape(-1, *([1] * (weight.ndim - 1)))
+                    scaled = weight.to(dtype=torch.float32) * s
+                    rotated = _rotate_weight(scaled, h_cache[gs], gs)
+                    state_dict[w_key] = rotated.to(dtype=target_dtype)
+            else:
+                s = scale.to(device=weight.device, dtype=torch.float32)
+                if s.ndim == 1:
+                    s = s.reshape(-1, *([1] * (weight.ndim - 1)))
+                state_dict[w_key] = (weight.to(dtype=torch.float32) * s).to(dtype=target_dtype)
+            count += 1
+
+        state_dict.pop(base + ".weight_scale_2", None)
+        state_dict.pop(base + ".input_scale", None)
+
+    for k in list(state_dict.keys()):
+        if isinstance(k, str) and k.endswith(".comfy_quant"):
+            state_dict.pop(k, None)
+
+    if count > 0:
+        if use_cuda:
+            torch.cuda.synchronize()
+        print(f"[Forge] Dequantized {count} ConvRot/INT8 weights to {target_dtype} in {time.time() - t0:.2f}s")
+
+    return state_dict
+

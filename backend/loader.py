@@ -261,6 +261,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                 with using_forge_operations(**to_args, manual_cast_enabled=True):
                     model = IntegratedCLIP(CLIPTextModel, config, add_text_projection=True).to(**to_args)
 
+            from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+            state_dict = dequantize_state_dict_inplace(state_dict, compute_dtype=to_args["dtype"])
+
             # transformers 5.x flattened CLIPTextModel: text_model.X -> X
             # SD checkpoint keys use "text_model.X", Nunchaku keys use "transformer.text_model.X"
             # Strip all known wrapper prefixes, then re-add "transformer." for IntegratedCLIP
@@ -384,6 +387,9 @@ def load_huggingface_component(guess, component_name, lib_name, cls_name, repo_p
                         beautiful_print_gguf_state_dict_statics(state_dict)
             else:
                 print(f"Using Default T5 Data Type: {storage_dtype}")
+
+            from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+            state_dict = dequantize_state_dict_inplace(state_dict, compute_dtype=storage_dtype)
 
             if storage_dtype in ["nf4", "fp4", "gguf"]:
                 with modeling_utils.no_init_weights():
@@ -975,6 +981,9 @@ def split_state_dict(sd, additional_state_dicts: list = None):
     sd = guess.process_vae_state_dict(sd)
 
     state_dict = {guess.unet_target: try_filter_state_dict(sd, guess.unet_key_prefix), guess.vae_target: try_filter_state_dict(sd, guess.vae_key_prefix)}
+
+    from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+    sd = dequantize_state_dict_inplace(sd, compute_dtype=memory_management.text_encoder_dtype())
 
     sd = guess.process_clip_state_dict(sd)
 

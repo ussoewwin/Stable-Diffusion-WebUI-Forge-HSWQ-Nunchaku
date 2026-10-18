@@ -40,12 +40,56 @@ def int8_load_scope():
         yield
 
 
+_HADAMARD_GLOBAL_CACHE: dict[tuple[int, str], object] = {}
+
+
+def _apply_forge_hadamard_cache_patches() -> None:
+    """Runtime monkeypatch for Hadamard device caching without modifying ComfyUI-HSWQ-Loader-and-Tools."""
+    import patches.comfy_quant_int8 as cqi
+
+    if not getattr(cqi, "_forge_hadamard_cache_patched", False):
+        orig_regular_hadamard = cqi._regular_hadamard_global
+
+        def _cached_regular_hadamard_global(size: int, device=None):
+            key = (int(size), str(device))
+            cached = _HADAMARD_GLOBAL_CACHE.get(key)
+            if cached is not None:
+                return cached
+            res = orig_regular_hadamard(size, device=device)
+            _HADAMARD_GLOBAL_CACHE[key] = res
+            return res
+
+        cqi._regular_hadamard_global = _cached_regular_hadamard_global
+        cqi._forge_hadamard_cache_patched = True
+
+    try:
+        nc = cqi._load_native_convert_int8_helpers()
+        if nc is not None and not getattr(nc, "_forge_unrotate_conv2d_patched", False):
+            orig_unrotate_conv2d = nc.unrotate_weight_conv2d
+
+            def _device_cached_unrotate_weight_conv2d(weight, h_matrix, group_size: int):
+                if getattr(weight, "device", None) is not None and (
+                    getattr(h_matrix, "device", None) != weight.device
+                    or getattr(h_matrix, "dtype", None) != weight.dtype
+                ):
+                    h_matrix = nc.get_hadamard_on_device(
+                        int(group_size), device=weight.device, dtype=weight.dtype
+                    )
+                return orig_unrotate_conv2d(weight, h_matrix, group_size)
+
+            nc.unrotate_weight_conv2d = _device_cached_unrotate_weight_conv2d
+            nc._forge_unrotate_conv2d_patched = True
+    except Exception as exc:
+        _plog(f"warn: _apply_forge_hadamard_cache_patches nc hook skipped: {exc}")
+
+
 def ensure_int8_patches() -> bool:
     """Apply INT8 patches only when the INT8 load branch runs."""
     _ensure_loader_path()
     from patches.comfy_quant_int8 import apply_comfy_quant_int8_patches
 
     ok = apply_comfy_quant_int8_patches()
+    _apply_forge_hadamard_cache_patches()
     _plog(f"ensure_int8_patches → {ok}")
     return ok
 
