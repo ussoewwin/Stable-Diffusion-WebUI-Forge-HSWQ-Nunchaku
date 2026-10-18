@@ -16,7 +16,7 @@
   - `dequantize_state_dict_inplace` 自动检测 bf16/fp16 计算 dtype，可用时走原生 bf16 去量化路径，并按设备缓存 Hadamard 矩阵。标准与 Qwen Image Fun ControlNet 加载器在构建前对 INT8 state dict 去量化；Qwen Fun 模型同步到扩散模型的设备与 dtype。
 - **修复：量化加载与模型移动在推理模式下安全执行**
   - 量化模型构建、`load_state_dict` 与 `ModelPatcher` patch/unpatch 移动现在在禁用推理模式下运行，避免量化权重改写触发 autograd 记账错误。
-- 详见 [发布说明](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) 了解详情。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.4.md)。
 
 ## Version 2.0.3
 
