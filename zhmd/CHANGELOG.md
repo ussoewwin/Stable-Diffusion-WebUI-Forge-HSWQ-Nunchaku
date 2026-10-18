@@ -8,6 +8,16 @@
 </table>
 
 
+## Version 2.0.7
+
+- **修复：ControlNet ConvRot INT8 载入与精度同步支持**
+  - 彻底解决了载入 ConvRot INT8 ControlNet 模型（包括标准 ControlNet 与 Qwen Fun ControlNet）时的初始化失败、浮点梯度报错（`RuntimeError: Only Tensors of floating point and complex dtype can require gradients`）以及 dtype 不匹配缺陷。
+  - **构建前就地反量化**：在 `modules_forge/supported_controlnet.py` 的 `ControlNetPatcher.try_build_from_state_dict` 中，在检查 marker 或构建模型前先行调用 `dequantize_state_dict_inplace`，并自动识别 `bfloat16` 与 `float16` 目标计算精度。
+  - **Qwen Fun ControlNet 精度与设备同步**：在 `modules_forge/supported_controlnet_qwen_fun.py` 中，`_build_comfyui_fun_model` 在探测形状前将权重字典反量化为 `torch.bfloat16`；`QwenFunControlNetPatcher.process` 将构建完成的 Fun 模型同步至扩散模型的设备**与**浮点计算精度（`bfloat16`、`float16`、`float32`），彻底根绝前向传播时的精度冲突。
+  - **原生 bfloat16 内核与 GPU Hadamard 缓存**：在回退去量化中扩展原生 `comfy_kitchen` C++/CUDA 内核代码 `2` 支持 `bfloat16`，并实现按 `(group_size, device)` 维度的 GPU Hadamard 旋转矩阵常驻缓存，最大化吞吐性能。
+  - **推理模式隔离防护**：模型构建与权重 patch 调度在 `torch.inference_mode(False), torch.no_grad()` 环境下执行，杜绝 autograd 版本计数器记账冲突。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.7.md)。
+
 ## Version 2.0.6
 
 - **全面整合 ConvRot INT8 CLIP 与文本编码器架构支持**

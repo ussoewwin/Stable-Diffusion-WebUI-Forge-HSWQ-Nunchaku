@@ -8,6 +8,16 @@
 </table>
 
 
+## Version 2.0.7
+
+- **Fix: ControlNet ConvRot INT8 Loading & Precision Synchronization**
+  - Resolves initialization failures, floating-point gradient errors (`RuntimeError: Only Tensors of floating point and complex dtype can require gradients`), and dtype mismatches when loading ConvRot INT8 ControlNet models (including standard ControlNet and Qwen Fun ControlNet).
+  - **In-Place Pre-Construction Dequantization**: `ControlNetPatcher.try_build_from_state_dict` in `modules_forge/supported_controlnet.py` now executes `dequantize_state_dict_inplace` prior to marker inspection or model construction, automatically resolving `bfloat16` or `float16` target dtypes.
+  - **Qwen Fun ControlNet Precision & Device Sync**: In `modules_forge/supported_controlnet_qwen_fun.py`, `_build_comfyui_fun_model` dequantizes the state dict to `torch.bfloat16` before shape probing, and `QwenFunControlNetPatcher.process` synchronizes the instantiated Fun model to the diffusion model's device *and* floating-point dtype (`bfloat16`, `float16`, `float32`), preventing tensor dtype conflicts during the forward pass.
+  - **Native bfloat16 Kernel & Hadamard GPU Cache**: Extended fallback dequantization with native `comfy_kitchen` C++/CUDA kernel code `2` for `bfloat16` and implemented per-`(group_size, device)` persistent GPU caching of Hadamard matrices to maximize rotation throughput.
+  - **Inference Mode Isolation**: Model construction and weight patching run under `torch.inference_mode(False), torch.no_grad()`, eliminating autograd version counter bookkeeping errors.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.7) for details.
+
 ## Version 2.0.6
 
 - **Comprehensive ConvRot INT8 CLIP & Text Encoder Support**
