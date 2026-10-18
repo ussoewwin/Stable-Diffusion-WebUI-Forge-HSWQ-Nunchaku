@@ -7,6 +7,20 @@
   </tr>
 </table>
 
+## Version 2.0.2
+
+- **Fix: ComfyUI v0.40.0 AIMDO Import Failure & Compatibility Stubs**
+  - Resolved unconditional `ModuleNotFoundError` during startup when importing ComfyUI core modules (`comfy.storage`, `comfy.ops`, `comfy.model_prefetch`) that reference the proprietary `comfy_aimdo` C-extension.
+  - Implemented drop-in architectural compatibility stubs:
+    - **`comfy_aimdo/storage.py`**: Added `fast_disk(path) -> False` to safely bypass direct hardware bypass paths and fall back to standard filesystem I/O (`safetensors.torch.load_file`).
+    - **`comfy_aimdo/malloc_graph.py`**: Added `MallocGraph` and context manager `use_stream(stream)` to allow transparent CUDA graph memory compilation and stream ops on native PyTorch.
+- **Fix: RES4LYF Sampler Suite Restoration & Import Architecture**
+  - Resolved `NameError: name 'res4lyf' is not defined` in `modules/RES4LYF/__init__.py` by explicitly importing `from . import res4lyf` before calling `res4lyf.init()`.
+  - Added embedded `PromptServer` fallback mock in `modules/RES4LYF/res4lyf.py` to prevent `ModuleNotFoundError: No module named 'server'` when imported outside ComfyUI HTTP server runtime.
+  - Added global import hook transparent aliasing in `modules_forge/transformers_cache_compat.py` for `res4lyf` / `RES4LYF` namespaces, resolving top-level imports to vendored `modules.RES4LYF`.
+  - Synchronized `sys.modules['res4lyf']` and `sys.modules['RES4LYF']` in `forge_res4lyf_samplers.py` to register all samplers (`rk_beta`, `res_multistep`, ODE variants) cleanly into Forge.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.2) for details.
+
 ## Version 2.0.1
 
 - **Deprecation & Removal: SDXL ConvRot NVFP4 Support**

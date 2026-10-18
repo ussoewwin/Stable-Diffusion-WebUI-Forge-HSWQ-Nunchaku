@@ -7,6 +7,20 @@
   </tr>
 </table>
 
+## Version 2.0.2
+
+- **修复：ComfyUI v0.40.0 AIMDO 导入异常与兼容性 Stub 实现**
+  - 彻底解决了在未安装专有 `comfy_aimdo` C++ 扩展的环境下，ComfyUI 核心模块（`comfy.storage`、`comfy.ops`、`comfy.model_prefetch`）在启动时无条件抛出 `ModuleNotFoundError` 的严重缺陷。
+  - 构建了无缝兼容的结构性 Stub 模块：
+    - **`comfy_aimdo/storage.py`**：实现 `fast_disk(path) -> False`，明确告知存储子系统回退到标准文件系统 I/O（`safetensors.torch.load_file`），绕过专有硬件直通通道。
+    - **`comfy_aimdo/malloc_graph.py`**：提供 `MallocGraph` 类与 `use_stream(stream)` 上下文管理器，使 CUDA Graph 内存调度透明运行在 PyTorch 原生 CUDA Stream 堆栈上。
+- **修复：RES4LYF 采样器套件恢复与全局导入架构优化**
+  - 修复 `modules/RES4LYF/__init__.py` 中因缺失 `from . import res4lyf` 导致调用 `res4lyf.init()` 时崩溃的 `NameError: name 'res4lyf' is not defined`。
+  - 在 `modules/RES4LYF/res4lyf.py` 中内置 `PromptServer` 独立回退 Mock，消除在非 ComfyUI HTTP 服务环境下直接导入时抛出的 `ModuleNotFoundError: No module named 'server'`。
+  - 在 `modules_forge/transformers_cache_compat.py` 中通过 `_hooked_import` 拦截顶层 `res4lyf` / `RES4LYF` 导入，自动映射至内置的 `modules.RES4LYF`。
+  - 在 `forge_res4lyf_samplers.py` 中双向同步 `sys.modules`，确保所有高级采样器（`rk_beta`、`res_multistep` 等）无损注册至 Forge 原生采样调度器列表中。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.2.md)。
+
 ## Version 2.0.1
 
 - **废除并完全移除：SDXL ConvRot NVFP4 支持**
