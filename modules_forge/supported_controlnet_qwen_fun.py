@@ -72,6 +72,12 @@ def _build_raw_hint_latent(cond, process=None) -> Optional[torch.Tensor]:
 
 def _build_comfyui_fun_model(state_dict: dict, dtype=None):
     """Instantiate ComfyUI's QwenImageFunControlNetModel and load weights."""
+    try:
+        from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+        state_dict = dequantize_state_dict_inplace(state_dict, compute_dtype=torch.bfloat16)
+    except Exception as e:
+        print(f"[Qwen Fun ControlNet] dequantize_state_dict_inplace note: {e}")
+
     in_features = state_dict["control_img_in.weight"].shape[1]  # 132
     inner_dim = state_dict["control_img_in.weight"].shape[0]  # 3072
 
@@ -81,6 +87,8 @@ def _build_comfyui_fun_model(state_dict: dict, dtype=None):
 
     if dtype is None:
         dtype = block_weight.dtype
+        if getattr(dtype, "is_floating_point", None) is False:
+            dtype = torch.bfloat16
 
     operations = comfy.ops.disable_weight_init
 
@@ -326,15 +334,20 @@ class QwenFunControlNetPatcher(ControlModelPatcher):
         print(f"[Qwen Fun ControlNet] Processing ControlNet for Qwen Image")
         print(f"[Qwen Fun ControlNet] Strength: {strength}, hint shape: {raw_hint.shape}")
 
-        # Move fun_model to the same device as diffusion_model
+        # Move fun_model to the same device and floating-point dtype as diffusion_model
         try:
             target_dev = next(diffusion_model.parameters()).device
         except StopIteration:
             target_dev = torch.device("cuda:0")
-        fun_dev = next(self.fun_model.parameters()).device
-        if fun_dev != target_dev:
-            self.fun_model.to(target_dev)
-            print(f"[Qwen Fun ControlNet] Moved Fun model from {fun_dev} to {target_dev}")
+        target_dtype = torch.bfloat16
+        for p in diffusion_model.parameters():
+            if p.dtype in (torch.bfloat16, torch.float16, torch.float32):
+                target_dtype = p.dtype
+                break
+        fun_param = next(self.fun_model.parameters())
+        if fun_param.device != target_dev or fun_param.dtype != target_dtype:
+            self.fun_model.to(device=target_dev, dtype=target_dtype)
+            print(f"[Qwen Fun ControlNet] Moved Fun model from {fun_param.device}/{fun_param.dtype} to {target_dev}/{target_dtype}")
 
         # Create a model_function_wrapper that injects control at each step
         fun_model = self.fun_model
@@ -361,9 +374,9 @@ class QwenFunControlNetPatcher(ControlModelPatcher):
             step_counter[0] += 1
 
             try:
-                # Determine base model dtype for casting
+                # Determine fun_model's floating-point dtype for casting inputs
                 try:
-                    model_dtype = next(base_model_ref.parameters()).dtype
+                    model_dtype = next(fun_model.parameters()).dtype
                 except StopIteration:
                     model_dtype = torch.bfloat16
 

@@ -347,6 +347,14 @@ def dequantize_state_dict_inplace(state_dict: dict, compute_dtype=None) -> dict:
         except Exception:
             pass
 
+    if compute_dtype is None:
+        for v in state_dict.values():
+            if isinstance(v, torch.Tensor) and v.dtype in (torch.bfloat16, torch.float16):
+                compute_dtype = v.dtype
+                break
+        if compute_dtype is None:
+            compute_dtype = torch.float16
+
     scale_keys = [k for k in list(state_dict.keys()) if isinstance(k, str) and k.endswith(".weight_scale")]
 
     for scale_key in scale_keys:
@@ -361,7 +369,7 @@ def dequantize_state_dict_inplace(state_dict: dict, compute_dtype=None) -> dict:
         scale = state_dict.pop(scale_key)
         q_tensor = state_dict.pop(q_key, None)
 
-        target_dtype = compute_dtype if compute_dtype is not None else torch.float16
+        target_dtype = compute_dtype
 
         layer_conf = {}
         if q_tensor is not None:
@@ -394,23 +402,27 @@ def dequantize_state_dict_inplace(state_dict: dict, compute_dtype=None) -> dict:
                     try:
                         w_cu = weight.cuda()
                         s_cu = scale.to(device=w_cu.device, dtype=torch.float32).reshape(-1).contiguous()
-                        code = 1 if target_dtype == torch.float16 else 0
+                        code = 1 if target_dtype == torch.float16 else (2 if target_dtype == torch.bfloat16 else 0)
                         out_cu = torch.ops.comfy_kitchen.dequantize_int8_convrot_weight_dtype(w_cu, s_cu, gs, code)
-                        state_dict[w_key] = out_cu.cpu().to(dtype=target_dtype)
+                        state_dict[w_key] = out_cu.to(dtype=target_dtype).cpu()
                         del w_cu, s_cu, out_cu
                         dequantized = True
                     except Exception:
                         dequantized = False
 
                 if not dequantized:
-                    if gs not in h_cache:
-                        h_cache[gs] = _build_hadamard(gs, device="cpu", dtype=torch.float32)
-                    s = scale.to(device=weight.device, dtype=torch.float32)
+                    rot_dev = "cuda" if use_cuda else weight.device
+                    h_key = (gs, str(rot_dev))
+                    if h_key not in h_cache:
+                        h_cache[h_key] = _build_hadamard(gs, device=rot_dev, dtype=torch.float32)
+                    w_f = weight.to(device=rot_dev, dtype=torch.float32)
+                    s = scale.to(device=rot_dev, dtype=torch.float32)
                     if s.ndim == 1:
                         s = s.reshape(-1, *([1] * (weight.ndim - 1)))
-                    scaled = weight.to(dtype=torch.float32) * s
-                    rotated = _rotate_weight(scaled, h_cache[gs], gs)
-                    state_dict[w_key] = rotated.to(dtype=target_dtype)
+                    scaled = w_f * s
+                    rotated = _rotate_weight(scaled, h_cache[h_key], gs)
+                    state_dict[w_key] = rotated.to(dtype=target_dtype).cpu()
+                    del w_f, s, scaled, rotated
             else:
                 s = scale.to(device=weight.device, dtype=torch.float32)
                 if s.ndim == 1:

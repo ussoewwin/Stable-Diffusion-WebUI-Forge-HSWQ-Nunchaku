@@ -85,6 +85,12 @@ class ControlModelPatcher:
 class ControlNetPatcher(ControlModelPatcher):
     @staticmethod
     def try_build_from_state_dict(controlnet_data, ckpt_path):
+        try:
+            from backend.patch_comfy_quant_layout_fallback import dequantize_state_dict_inplace
+            controlnet_data = dequantize_state_dict_inplace(controlnet_data, compute_dtype=None)
+        except Exception as e:
+            print(f"[ControlNet] dequantize_state_dict_inplace note: {e}")
+
         # Nunchaku Qwen Image ControlNet ONLY (detected by transformer_blocks.0.img_mlp.net.0.proj.weight)
         # This is for NunchakuQwenImageTransformer2DModel ONLY - NOT for standard QwenImageTransformer2DModel
         _ix_marker = "transformer_blocks.0.img_mlp.net.0.proj.weight"
