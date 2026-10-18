@@ -92,5 +92,6 @@ modules/RES4LYF/.git
 # Private folders & scratch
 反省文/
 scratch/
+.openclaw
 .openclaw/
 workspace/
