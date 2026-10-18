@@ -25,6 +25,7 @@ if new_scheduler_name not in SCHEDULER_HANDLERS:
     SCHEDULER_NAMES.append(new_scheduler_name)
 
 
+from . import res4lyf
 from .res4lyf import RESplain
 
 #torch.use_deterministic_algorithms(True)

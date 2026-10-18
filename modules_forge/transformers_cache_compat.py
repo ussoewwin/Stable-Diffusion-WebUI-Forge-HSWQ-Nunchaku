@@ -155,7 +155,20 @@ def _hooked_import(name, *args, **kwargs):
             vmod.__version__ = "0.3.0"
             vmod.__gitsha__ = "unknown"
             sys.modules["facexlib.version"] = vmod
-            return vmod
+    if name in ("res4lyf", "RES4LYF") or name.startswith(("res4lyf.", "RES4LYF.")):
+        import sys
+        if name in sys.modules:
+            return sys.modules[name]
+        try:
+            return _original_import(name, *args, **kwargs)
+        except (ModuleNotFoundError, ImportError):
+            if name in ("res4lyf", "RES4LYF"):
+                real_mod = _original_import("modules.RES4LYF", *args, **kwargs)
+            else:
+                sub = name.split(".", 1)[1]
+                real_mod = _original_import(f"modules.RES4LYF.{sub}", *args, **kwargs)
+            sys.modules[name] = real_mod
+            return real_mod
 
     try:
         mod = _original_import(name, *args, **kwargs)

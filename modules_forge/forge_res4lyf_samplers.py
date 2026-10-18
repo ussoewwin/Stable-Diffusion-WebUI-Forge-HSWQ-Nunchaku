@@ -246,6 +246,8 @@ def register_res4lyf_samplers():
         # Note: RES4LYF also requires optional dependencies like matplotlib, pywavelets
         # but these are only needed for certain nodes, not for sampler registration
         from modules import RES4LYF
+        sys.modules['res4lyf'] = RES4LYF
+        sys.modules['RES4LYF'] = RES4LYF
         import comfy.k_diffusion.sampling as comfy_k_diffusion_sampling
         
         # Get the extra_samplers dictionary (populated by beta/legacy/zampler modules)

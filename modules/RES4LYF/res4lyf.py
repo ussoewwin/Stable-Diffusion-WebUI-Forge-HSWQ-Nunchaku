@@ -9,8 +9,28 @@ import aiohttp
 import math
 import comfy.model_sampling
 import comfy.samplers
-from aiohttp import web
-from server import PromptServer
+try:
+    from server import PromptServer
+except (ImportError, ModuleNotFoundError):
+    class _MockPromptServerInstance:
+        def __init__(self):
+            class _MockRoutes:
+                def post(self, path):
+                    def decorator(func):
+                        return func
+                    return decorator
+            self.routes = _MockRoutes()
+            self.client_id = None
+            self.supports = set()
+
+        def send_sync(self, event_type, data):
+            pass
+
+        async def send(self, event_type, data):
+            pass
+
+    class PromptServer:
+        instance = _MockPromptServerInstance()
 from tqdm import tqdm
 
 

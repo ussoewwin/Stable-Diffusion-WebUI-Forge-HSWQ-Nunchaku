@@ -3,7 +3,7 @@ Pillow==12.3.0
 pillow-jxl-plugin
 accelerate==1.14.0
 blendmodes==2025
-numpy==2.5.1
+numpy==2.5.3
 clean-fid==0.1.35
 diffusers>=0.39.0
 diskcache==5.6.3
@@ -35,7 +35,7 @@ scipy
 alembic
 SQLAlchemy
 av>=14.2.0
-peft==0.18.1
+peft>=0.18.1
 piexif==1.1.3
 pillow-heif>=0.22.0
 protobuf==7.34.1
@@ -62,3 +62,13 @@ loguru
 jsonschema
 pandas
 # tensorflow  # omitted: tensorflow does not support Python 3.14
+
+# ComfyUI-master (vendored engine) runtime dependencies.
+# Required by the RES4LYF sampler registration path (comfy.samplers ->
+# comfy.model_prefetch -> comfy_aimdo) and by SDXL ConvRot NVFP4
+# dequantization (comfy_kitchen.dequantize_nvfp4).
+# Deliberately unpinned: ComfyUI-master tracks upstream, so always install the
+# latest release (launch_utils installs requirements with -U, and
+# modules/a1111_res4lyf_samplers.py re-upgrades them at every startup).
+comfy-kitchen>=0.2.37
+comfy-aimdo>=0.5.6

@@ -88,3 +88,9 @@ modules/RES4LYF/.git
 /test_cv2_bootstrap_patch.py
 /verify_output.txt
 /verify_output_standalone.txt
+
+# Private folders & scratch
+反省文/
+scratch/
+.openclaw/
+workspace/
