@@ -47,17 +47,17 @@
   - Robust change detection to handle model reloads correctly
   - AWQ quantization layer handling with safety switch
 
-- **INT8 (Low Bits) UNet Quantization**
-  - ✅ **INT8 UNet / DiT support for SDXL, Z-Image, and Krea2**
+- **ConvRot INT8 (Low Bits) UNet / DiT Quantization**
+  - ✅ **ConvRot INT8 UNet / DiT support for SDXL, Z-Image, and Krea2**
   - Selected explicitly from the **`Diffusion in Low Bits` dropdown** in the Forge settings panel, never auto-detected. The full menu is:
-    - `Automatic` — no forced storage dtype (default; **not** INT8)
+    - `Automatic` — no forced storage dtype (default; **not** ConvRot INT8)
     - `Automatic (fp16 LoRA)` — same as `Automatic`, LoRA kept in FP16
     - `float8-e4m3fn` / `float8-e4m3fn (fp16 LoRA)` — FP8 storage paths
-    - **`int8`** — INT8 UNet, LoRA baked into the INT8 weights
-    - **`int8 (fp16 LoRA)`** — INT8 UNet, LoRA kept in FP16 for online (bake-free) application
+    - **`int8`** — ConvRot INT8 UNet / DiT, LoRA baked into the INT8 weights
+    - **`int8 (fp16 LoRA)`** — ConvRot INT8 UNet / DiT, LoRA kept in FP16 for online (bake-free) application
     - `bnb-nf4` / `bnb-fp4` (and their `(fp16 LoRA)` variants) — only shown when bitsandbytes is available
-  - Only the two **`int8`** / **`int8 (fp16 LoRA)`** entries enable INT8; every other entry uses a different loading path
-  - Tensor-wise INT8 storage (`int8_tensorwise`) for reduced VRAM usage
+  - Only the two **`int8`** / **`int8 (fp16 LoRA)`** entries enable ConvRot INT8; every other entry uses a different loading path
+  - Tensor-wise ConvRot INT8 storage (`int8_tensorwise`) with Hadamard rotation handling for reduced VRAM usage
   - `int8 (fp16 LoRA)` keeps LoRA in FP16 for online (bake-free) application
   - Fully separated from the float8 / bnb / Automatic loading paths
 
@@ -65,7 +65,7 @@
     <img src="png/int8.png" alt="Diffusion in Low Bits dropdown with int8 options" width="400">
   </p>
 
-  *`Diffusion in Low Bits` dropdown: `int8` / `int8 (fp16 LoRA)` selection*
+  *`Diffusion in Low Bits` dropdown: `int8` / `int8 (fp16 LoRA)` (ConvRot INT8) selection*
 
 - **ConvRot INT8 Text Encoder (CLIP) & ControlNet Support**
   - ✅ **Full ConvRot INT8 CLIP / Text Encoder support across major architectures**
@@ -83,7 +83,7 @@
 - **Krea2 Model Support**
   - ✅ **Native Forge support for Krea2** (SingleStreamDiT; e.g. `moodyKreaMix_V33.safetensors`)
   - Dedicated **UI Preset: Krea2** in the Forge checkpoint panel
-  - ✅ **Full INT8 DiT (`int8` / `int8 (fp16 LoRA)`) support with dynamic layer swapping** for smooth generation on 16GB GPUs
+  - ✅ **Full ConvRot INT8 DiT (`int8` / `int8 (fp16 LoRA)`) support with dynamic layer swapping** for smooth generation on 16GB GPUs
   - Load **Additional modules**: `qwen_image_vae.safetensors` (Qwen-Image VAE), Qwen3-VL-4B text encoder (e.g. `qwen3vl_4b_bf16.safetensors`)
   - LoRA key mapping via `krea2_to_diffusers`
 
