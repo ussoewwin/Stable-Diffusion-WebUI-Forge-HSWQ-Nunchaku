@@ -8,6 +8,19 @@
 </table>
 
 
+## Version 2.0.6
+
+- **全面整合 ConvRot INT8 CLIP 与文本编码器架构支持**
+  - 汇总并完善了对各大主流扩散模型体系下 **ConvRot INT8 (HSWQ)** 文本编码器与 ControlNet 检查点的端到端支持：
+    - **SDXL**：在键名转换前就地执行 CLIP-L（70层）与 CLIP-G / OpenCLIP bigG（63层）的反量化与 Hadamard 逆旋转（`dequantize_state_dict_inplace`），彻底杜绝黑图与 NaN 潜空间崩溃。
+    - **Flux1 / Nunchaku Flux1**：无缝支持 `clip_l_hswq_convrot_int8` 与 `flan_t5_xxl_hswq_convrot_int8`。
+    - **Z-Image (ZIT)**：完整支持 ConvRot INT8 文本编码器载入。
+    - **Qwen Image**：原生支持 ConvRot INT8 文本编码器。
+    - **Krea2 与 Anima**：通过 `comfy_quant` / `MixedPrecisionOps` 直接以 INT8 `QuantizedTensor` 原生载入 Qwen3-VL-4B、Qwen3-4B 与 Gemma2-2B（约 0.4 秒直接以 4.24 GB 载入，杜绝未压缩 FP16 的显存膨胀）。
+    - **ControlNet ConvRot INT8**：就地反量化原生支持 `bfloat16` 与 `float16` 计算精度，按 `(group_size, device)` 维度的 GPU Hadamard 旋转矩阵常驻缓存，非推理模式构建模型。
+    - **运行时 Hadamard 显存缓存**：在 `modules_forge/hswq_int8.py` 中通过非侵入式运行时 Hook 实现按 `(group_size, device)` 维度的 GPU 设备缓存，消除重复的 Host-to-Device 矩阵传输，保持内置 ComfyUI HSWQ loader 零改动。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.6.md)。
+
 ## Version 2.0.5
 
 - **修复：Krea2 INT8 在 16GB 显存下的 OutOfMemory (OOM) 缺陷与 Issue #3 解决**

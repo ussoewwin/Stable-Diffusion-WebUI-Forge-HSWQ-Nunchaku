@@ -8,6 +8,19 @@
 </table>
 
 
+## Version 2.0.6
+
+- **Comprehensive ConvRot INT8 CLIP & Text Encoder Support**
+  - Unified and finalized end-to-end support for **ConvRot INT8 (HSWQ)** text encoders and ControlNet checkpoints across all major diffusion model architectures:
+    - **SDXL**: In-place dequantization with Hadamard unrotation (`dequantize_state_dict_inplace`) for CLIP-L (70 layers) and CLIP-G / OpenCLIP bigG (63 layers) executed prior to key transformation, completely eliminating solid black images and NaN latent collapse.
+    - **Flux1 / Nunchaku Flux1**: Seamless support for `clip_l_hswq_convrot_int8` and `flan_t5_xxl_hswq_convrot_int8`.
+    - **Z-Image (ZIT)**: Full loading support for ConvRot INT8 text encoders.
+    - **Qwen Image**: Native support for ConvRot INT8 text encoders.
+    - **Krea2 & Anima**: Direct INT8 `QuantizedTensor` native loading via `comfy_quant` / `MixedPrecisionOps` for Qwen3-VL-4B, Qwen3-4B, and Gemma2-2B (loads in ~0.4s @ 4.24 GB without uncompressed FP16 memory bloat).
+    - **ControlNet ConvRot INT8**: In-place dequantization supporting both `bfloat16` and `float16` computation dtypes, device-cached Hadamard rotation matrices, and non-inference mode model construction.
+    - **Runtime Hadamard Cache**: High-performance persistent GPU-device Hadamard caching per `(group_size, device)` hook in `modules_forge/hswq_int8.py`, eliminating redundant CPU-GPU matrix transfers while keeping upstream modules untouched.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.6) for details.
+
 ## Version 2.0.5
 
 - **Fix: Krea2 INT8 OutOfMemory (OOM) on 16GB VRAM & Issue #3 Resolution**
