@@ -305,6 +305,13 @@ def ensure_comfy_quant_layout_fallback_patch() -> bool:
     ops._load_quantized_module = _wrap_load_quantized_module(ops._load_quantized_module)
     if hasattr(ops, "mixed_precision_ops"):
         ops.mixed_precision_ops = _wrap_mixed_precision_ops(ops.mixed_precision_ops)
+    if hasattr(ops, "_quantized_apply") and not getattr(ops, "_forge_quantized_apply_patched", False):
+        _orig_qa = ops._quantized_apply
+        def _safe_quantized_apply(module, fn, recurse=True):
+            with torch.inference_mode(False), torch.no_grad():
+                return _orig_qa(module, fn, recurse=recurse)
+        ops._quantized_apply = _safe_quantized_apply
+        ops._forge_quantized_apply_patched = True
 
     ops._forge_layout_fallback_patched = True
     _PATCHED = True
