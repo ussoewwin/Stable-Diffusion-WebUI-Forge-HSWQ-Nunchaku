@@ -26,7 +26,7 @@
   - `build_module_profile`/LoadedModel 现在正确分析并 offload `comfy_cast_weights` 模块（放得下时驻留 GPU，卸载时正确恢复 cast 状态）。
 - **改进：Lumina2 / ZImage / SingleStreamDiT / Cosmos dtype 传播**
   - 在标准、INT8 与 Krea2 混合精度加载分支中统一应用 `unet_config.setdefault("dtype", computation_dtype)`，并在模型构造外层加 `torch.inference_mode(False)`，需要显式 `dtype` 键的 transformer 构造函数不再崩溃或静默以 fp32 构建。
-- 发布说明：待定 (v2.0.4)
+- 详见 [发布说明](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) 了解详情。
 
 ## Version 2.0.3
 

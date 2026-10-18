@@ -26,7 +26,7 @@
   - `build_module_profile`/LoadedModel now profile and offload `comfy_cast_weights` modules correctly (GPU-resident when they fit, proper cast-restore on unload).
 - **Improvement: Lumina2 / ZImage / SingleStreamDiT / Cosmos dtype propagation**
   - `unet_config.setdefault("dtype", computation_dtype)` applied across standard, INT8, and Krea2 mixed-precision load branches, plus `torch.inference_mode(False)` around model construction, so transformer constructors needing an explicit `dtype` key no longer crash or silently build in fp32.
-- Release notes: pending (v2.0.4)
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.4) for details.
 
 ## Version 2.0.3
 
