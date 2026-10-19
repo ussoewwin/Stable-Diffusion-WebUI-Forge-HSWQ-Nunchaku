@@ -1,4 +1,4 @@
-<h1 align="center">Stable Diffusion WebUI Forge HSWQ Nunchaku</h1>
+<h1 align="center">Stable Diffusion WebUI Forge HSWQ-Nunchaku</h1>
 
 <table align="center">
   <tr>
