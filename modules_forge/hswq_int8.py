@@ -258,6 +258,92 @@ def build_int8_operations(compute_dtype):
     return ops
 
 
+def _quantize_float_weights_on_the_fly(model, compute_dtype) -> dict:
+    """Convert plain float weights to INT8 storage when the checkpoint carries no quant info.
+
+    The UI Low Bits ``int8`` options mean "store the UNet in INT8". A checkpoint that
+    carries ``comfy_quant`` keys already arrives quantized and is loaded as such; a plain
+    fp16 checkpoint does not, so the INT8 branch used to leave every weight in fp16 and
+    only report a failure. Here the loaded weights are quantized to tensorwise INT8 so the
+    selection actually produces INT8 storage.
+
+    Only modules that can hold a QuantizedTensor are touched, and a checkpoint that already
+    carries quant info is never re-quantized (protected FP16 layers stay FP16).
+    """
+    import torch
+    from comfy.quant_ops import QuantizedTensor
+
+    layout_type = "TensorWiseINT8Layout"
+    converted = 0
+    skipped = []
+    with torch.no_grad():
+        for name, module in model.named_modules():
+            quantizable = getattr(module, "_hswq_quant_conv2d", False) or (
+                hasattr(module, "quant_format") and hasattr(module, "_disabled_formats")
+            )
+            if not quantizable:
+                continue
+            weight = getattr(module, "weight", None)
+            if weight is None or isinstance(weight, QuantizedTensor):
+                continue
+            if weight.ndim not in (2, 4):
+                skipped.append(f"{name}:ndim={weight.ndim}")
+                continue
+            try:
+                quantized = QuantizedTensor.from_float(weight.detach(), layout_type)
+            except Exception as exc:
+                skipped.append(f"{name}:{exc}")
+                continue
+            module.weight = torch.nn.Parameter(quantized, requires_grad=False)
+            module.quant_format = "int8_tensorwise"
+            module.layout_type = layout_type
+            converted += 1
+    return {"converted": converted, "skipped": skipped}
+
+
+def _quantize_float_weights_on_the_fly(model, compute_dtype) -> dict:
+    """Convert plain float weights to INT8 storage when the checkpoint carries no quant info.
+
+    The UI Low Bits ``int8`` options mean "store the UNet in INT8". A checkpoint that
+    carries ``comfy_quant`` keys already arrives quantized and is loaded as such; a plain
+    fp16 checkpoint does not, so the INT8 branch used to leave every weight in fp16 and
+    only report a failure. Here the loaded weights are quantized to tensorwise INT8 so the
+    selection actually produces INT8 storage.
+
+    Only modules that can hold a QuantizedTensor are touched, and a checkpoint that already
+    carries quant info is never re-quantized (protected FP16 layers stay FP16).
+    """
+    import torch
+    from comfy.quant_ops import QuantizedTensor
+
+    layout_type = "TensorWiseINT8Layout"
+    converted = 0
+    skipped = []
+    with torch.no_grad():
+        for name, module in model.named_modules():
+            quantizable = getattr(module, "_hswq_quant_conv2d", False) or (
+                hasattr(module, "quant_format") and hasattr(module, "_disabled_formats")
+            )
+            if not quantizable:
+                continue
+            weight = getattr(module, "weight", None)
+            if weight is None or isinstance(weight, QuantizedTensor):
+                continue
+            if weight.ndim not in (2, 4):
+                skipped.append(f"{name}:ndim={weight.ndim}")
+                continue
+            try:
+                quantized = QuantizedTensor.from_float(weight.detach(), layout_type)
+            except Exception as exc:
+                skipped.append(f"{name}:{exc}")
+                continue
+            module.weight = torch.nn.Parameter(quantized, requires_grad=False)
+            module.quant_format = "int8_tensorwise"
+            module.layout_type = layout_type
+            converted += 1
+    return {"converted": converted, "skipped": skipped}
+
+
 def _count_sd_int8_keys(state_dict: dict) -> dict:
     cq = sum(1 for k in state_dict if k.endswith(".comfy_quant"))
     ws = sum(1 for k in state_dict if k.endswith(".weight_scale"))
@@ -388,6 +474,21 @@ def load_unet_int8_branch(
 
     probe_after = _probe_model_quant(model)
     _plog(f"after load_state_dict: {probe_after}")
+
+    plain_checkpoint = key_stats["comfy_quant"] == 0 and key_stats["int8_weight"] == 0
+    if probe_after["quantized_tensor_weights"] == 0 and plain_checkpoint:
+        # UI selected INT8 storage on a float checkpoint: quantize what was just loaded so
+        # the model is really INT8 instead of silently staying fp16.
+        on_the_fly = _quantize_float_weights_on_the_fly(model, computation_dtype)
+        probe_after = _probe_model_quant(model)
+        _plog(
+            f"plain checkpoint + UI int8 -> on-the-fly INT8: converted={on_the_fly['converted']} "
+            f"skipped={len(on_the_fly['skipped'])}"
+        )
+        if on_the_fly["skipped"]:
+            _plog(f"on-the-fly INT8 skipped samples: {on_the_fly['skipped'][:5]}")
+        _plog(f"after on-the-fly quantize: {probe_after}")
+
     if probe_after["quantized_tensor_weights"] == 0:
         _plog(
             "ERROR: zero QuantizedTensor weights after load — "
