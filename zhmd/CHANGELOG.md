@@ -8,6 +8,15 @@
 </table>
 
 
+## Version 2.0.8
+
+- **新增：IP-Adapter ConvRot INT8 支持与运行时 UNet INT8 量化**
+  - 新增对 **ConvRot INT8 (HSWQ)** IP-Adapter 包（`ip-adapter_sd15_plus_hswq_convrot_int8.safetensors`）的运行时支持：图像投影层与 IP-Attention 层保留 INT8 权重，通过 ConvRot INT8 GEMM 执行，不再在载入时反量化。
+  - 修复 `IPAdapterPatcher` 载入：INT8 sidecar 键（`comfy_quant` / `weight_scale`）现由 IP-Adapter 路径消费，而非作为 Unexpected keys 导致 `RuntimeError: Error(s) in loading state_dict for Resampler` 载入中止。
+  - 当在普通（非量化）checkpoint 上选择 UI Low Bits `int8` 选项时，UNet 权重现于载入过程中即时量化为 tensorwise INT8（已验证运行：转换 282 个 Conv 层、跳过 0 层），使该选项真正产生 INT8 存储，而非静默保留 FP16。
+  - 已验证：`int8 (fp16 LoRA)` 存储精度下 512x512 生成得到有效、非黑、非 NaN 的图像；与 FP16 存储路径的像素 cosine 为 1.000000。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.8.md)。
+
 ## Version 2.0.7
 
 - **修复：ControlNet ConvRot INT8 载入与精度同步支持**

@@ -8,6 +8,15 @@
 </table>
 
 
+## Version 2.0.8
+
+- **IP-Adapter ConvRot INT8 Support & On-the-Fly UNet INT8 Quantization**
+  - Added runtime support for **ConvRot INT8 (HSWQ)** IP-Adapter packs (`ip-adapter_sd15_plus_hswq_convrot_int8.safetensors`): the image projection and IP-attention layers now keep their weights as INT8 and execute through the ConvRot INT8 GEMM instead of being dequantized at load time.
+  - Fixed `IPAdapterPatcher` loading: the INT8 sidecar keys (`comfy_quant` / `weight_scale`) are now consumed by the IP-Adapter path instead of being reported as unexpected keys (which aborted loading with `RuntimeError: Error(s) in loading state_dict for Resampler`).
+  - When the UI Low Bits `int8` option is selected on a plain (non-quantized) checkpoint, the UNet weights are now quantized to tensorwise INT8 on the fly during load (282 Conv layers converted, 0 skipped in the verified run), so the selection actually produces INT8 storage instead of silently staying FP16.
+  - Verified: 512x512 render with `int8 (fp16 LoRA)` storage dtype produces a valid, non-black, non-NaN image; pixel cosine against the FP16 storage path is 1.000000.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.8) for details.
+
 ## Version 2.0.7
 
 - **Fix: ControlNet ConvRot INT8 Loading & Precision Synchronization**
