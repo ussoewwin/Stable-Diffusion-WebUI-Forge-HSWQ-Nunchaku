@@ -18,6 +18,7 @@ import torch.nn.functional as F
 import torchvision.transforms as TT
 
 from lib_ipadapter.resampler import PerceiverAttention, FeedForward, Resampler
+from lib_ipadapter.convrot_int8 import ConvRotInt8Linear, has_convrot_int8, install_convrot_linears, split_convrot_state_dict
 
 GLOBAL_MODELS_DIR = os.path.join(models_path, "ipadapter")
 MODELS_DIR = GLOBAL_MODELS_DIR
@@ -153,7 +154,19 @@ class To_KV(nn.Module):
         super().__init__()
 
         self.to_kvs = nn.ModuleDict()
+
+        # ConvRot INT8 packs keep their weights INT8; the sidecar keys are consumed here
+        # instead of being handed to nn.Linear. Float packs skip both branches.
+        if has_convrot_int8(state_dict):
+            quantized, state_dict = split_convrot_state_dict(state_dict)
+            for base, entry in quantized.items():
+                self.to_kvs[base.replace(".weight", "").replace(".", "_")] = ConvRotInt8Linear.from_weight(
+                    entry["weight"], entry["weight_scale"], entry["groupsize"]
+                )
+
         for key, value in state_dict.items():
+            if not key.endswith(".weight"):
+                continue
             self.to_kvs[key.replace(".weight", "").replace(".", "_")] = nn.Linear(value.shape[1], value.shape[0], bias=False)
             self.to_kvs[key.replace(".weight", "").replace(".", "_")].weight.data = value
 
@@ -292,7 +305,15 @@ class IPAdapter(nn.Module):
         else:
             self.image_proj_model = self.init_proj()
 
-        self.image_proj_model.load_state_dict(ipadapter_model["image_proj"])
+        # ConvRot INT8 packs carry ``weight_scale`` / ``comfy_quant`` sidecars that the
+        # stock ``load_state_dict`` rejects. Those layers stay INT8 and run on the ConvRot
+        # INT8 GEMM; the float remainder (norms, biases, latents) loads as before.
+        image_proj_state = ipadapter_model["image_proj"]
+        if has_convrot_int8(image_proj_state):
+            quantized, image_proj_state = split_convrot_state_dict(image_proj_state)
+            install_convrot_linears(self.image_proj_model, quantized)
+
+        self.image_proj_model.load_state_dict(image_proj_state)
         self.ip_layers = To_KV(ipadapter_model["ip_adapter"])
 
     def init_proj(self):
