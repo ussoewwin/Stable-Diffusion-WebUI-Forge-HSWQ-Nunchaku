@@ -8,6 +8,14 @@
 </table>
 
 
+## Version 2.0.9
+
+- **修复：IP-Adapter 条件注入不再与 Token Merging (ToMeSD) 冲突崩溃**
+  - 彻底解决了当 IP-Adapter ConvRot INT8 与 Token Merging（`token_merging_ratio > 0`）同时启用时，在第二次及后续生成中抛出 `RuntimeError: The expanded size of the tensor (3786) must match the existing size (8112)` 的崩溃。崩溃原因为 IP-Adapter 的 attn-replace patch 将 `transformer_options`（含 `attn1_patch` / ToMeSD 家族）一并转发进 SD 1.5 UNet forward，导致 ToMeSD 的二分软匹配对同一张量执行了两次。
+  - **限定范围的 `transformer_options` 转发**：`backend/modules/k_model.py` 现仅在存在 `patches_replace`（IP-Adapter 及同类 attn-replace patch）时才将 `transformer_options` 转发给 SD 1.5 UNet，并从中剔除 `patches`（attn1_patch）家族。ToMeSD 在此路径上保持原有行为，token-merging 输出无变化。
+  - 已验证：IP-Adapter weight 0.6 下连续三次 512x512 生成无崩溃；IP-Adapter 条件注入对图像产生可测量影响（512x512 下 weight 0.6 与 0.0 的像素 cosine 0.880120）；832x832 生成同样完成。
+- 详情请参阅 [Release Notes（中文）](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/blob/main/zhmd/v2.0.9.md)。
+
 ## Version 2.0.8
 
 - **新增：IP-Adapter ConvRot INT8 支持与运行时 UNet INT8 量化**

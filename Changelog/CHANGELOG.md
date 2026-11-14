@@ -8,6 +8,14 @@
 </table>
 
 
+## Version 2.0.9
+
+- **Fix: IP-Adapter Conditioning No Longer Crashes with Token Merging (ToMeSD)**
+  - Resolves `RuntimeError: The expanded size of the tensor (3786) must match the existing size (8112)` raised on the second and subsequent generations when IP-Adapter ConvRot INT8 was active together with Token Merging (`token_merging_ratio > 0`). The crash was caused by the IP-Adapter attn-replace patch forwarding `transformer_options` (including the `attn1_patch` / ToMeSD family) into the SD 1.5 UNet forward, where ToMeSD's bipartite soft matching was applied twice to the same tensor.
+  - **Scoped `transformer_options` Forwarding**: `backend/modules/k_model.py` now forwards `transformer_options` to the SD 1.5 UNet only when `patches_replace` (IP-Adapter and similar attn-replace patches) is present, and strips the `patches` (attn1_patch) family from it. ToMeSD keeps its historical behavior on this path; no change to token-merging output.
+  - Verified: three consecutive 512x512 generations with IP-Adapter weight 0.6 complete without crash; IP-Adapter conditioning measurably affects the image (pixel cosine 0.880120 between weight 0.6 and 0.0 at 512x512); 832x832 generation also completes.
+- See [Release Notes](https://github.com/ussoewwin/Stable-Diffusion-WebUI-Forge-Nunchaku/releases/tag/v2.0.9) for details.
+
 ## Version 2.0.8
 
 - **IP-Adapter ConvRot INT8 Support & On-the-Fly UNet INT8 Quantization**
