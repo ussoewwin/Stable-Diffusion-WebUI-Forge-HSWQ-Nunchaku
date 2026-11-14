@@ -210,6 +210,11 @@ class KModel(torch.nn.Module):
             is_nunchaku_qwen_image = dm_type_name == "NunchakuQwenImageTransformer2DModel"
             if is_nunchaku_qwen_image:
                 model_output = self.diffusion_model(xc, t, context=context, control=control, transformer_options=transformer_options, **extra_conds_clean).float()
+            elif "patches_replace" in (transformer_options or {}):
+                # IP-Adapter (and similar attn-replace patches) need transformer_options to
+                # reach the UNet forward; otherwise patches_replace is registered but never
+                # consumed and the conditioning has no effect on the generated image.
+                model_output = self.diffusion_model(xc, t, context=context, control=control, transformer_options=transformer_options, **extra_conds_clean).float()
             else:
                 model_output = self.diffusion_model(xc, t, context=context, control=control, **extra_conds_clean).float()
 
